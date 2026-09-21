@@ -6,11 +6,9 @@ import Header from '@/components/Header';
 import {
   BadgeCheck,
   FileText,
-  ArrowRight,
 } from 'lucide-react';
 import DashboardStats from '@/features/dashboard/components/DashboardStats';
 import ApplicationCards from '@/features/application-tracking/ApplicationCards';
-import RecommendationModules from '@/features/recommendations/RecommendationModules';
 import { useRequireOnboarding } from '@/hooks/useRequireOnboarding';
 
 const QUICK_ACTIONS = [
@@ -93,31 +91,9 @@ export default function DashboardPage() {
           </div>
 
           {/* Feature blocks */}
-          <RecommendationModules />
           <DashboardStats />
 
           <ApplicationCards />
-
-          {/* Copilot strip */}
-          <div className="mt-10 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-                ScholarAI copilot
-              </p>
-              <p className="mt-1 text-[15px] font-semibold text-gray-900">
-                Need a strong statement of purpose?
-              </p>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <Link
-                href="/sop-generator"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
-              >
-                Generate SOP
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
         </div>
       </main>
     </div>

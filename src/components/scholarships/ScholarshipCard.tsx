@@ -35,16 +35,24 @@ export default function ScholarshipCard({
   match,
   href,
   compact = false,
+  cta = "official",
 }: {
   scholarship: Scholarship;
   match?: ScholarshipMatch;
   href?: string;
   compact?: boolean;
+  /** Bottom action: the external official page (default) or the detail page. */
+  cta?: "official" | "scholarship";
 }) {
   const { id, name, university, country, description } = scholarship;
 
   const link = href ?? `/scholarships/${id}`;
   const officialUrl = verifiedOfficialUrl(scholarship);
+  const actionHref = cta === "scholarship" ? link : officialUrl;
+  const actionLabel =
+    cta === "scholarship" ? "View scholarship" : "View Official Scholarship";
+  const actionClass =
+    "flex w-full items-center justify-between rounded-xl border border-gray-900/15 bg-gray-50 px-4 py-2.5 text-[13px] font-semibold text-gray-900 transition-colors hover:bg-gray-100";
   const official = isOfficialApproved(scholarship);
   const status = scholarshipStatus(scholarship);
   const dl = deadlineLine(scholarship);
@@ -115,17 +123,24 @@ export default function ScholarshipCard({
         </div>
       )}
 
-      {officialUrl && (
+      {actionHref && (
         <div className="mt-auto pt-4">
-          <a
-            href={officialUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-between rounded-xl border border-gray-900/15 bg-gray-50 px-4 py-2.5 text-[13px] font-semibold text-gray-900 transition-colors hover:bg-gray-100"
-          >
-            View Official Scholarship
-            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-          </a>
+          {cta === "scholarship" ? (
+            <Link href={actionHref} className={actionClass}>
+              {actionLabel}
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          ) : (
+            <a
+              href={actionHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={actionClass}
+            >
+              {actionLabel}
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </a>
+          )}
         </div>
       )}
     </article>

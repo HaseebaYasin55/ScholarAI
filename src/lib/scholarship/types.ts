@@ -120,6 +120,13 @@ export interface ScholarshipFilter {
   nameContains?: string | null;
   /** Only rows whose source passed official-source verification. */
   verifiedOnly?: boolean;
+  /**
+   * Only rows that carry an official source URL (scholarship and/or university).
+   * This is the catalog's "linkable" gate: the client's `verifiedOfficialUrl`
+   * check then rejects blocked/untrusted hosts, so real official rows are not
+   * excluded just because the pipeline's verification timestamp is absent.
+   */
+  hasOfficialUrl?: boolean;
 }
 
 // ─── Data layer ──────────────────────────────────────────────────────────────
@@ -132,6 +139,7 @@ interface Filterable {
   overlaps(column: string, value: string[]): Filterable;
   not(column: string, op: string, value: unknown): Filterable;
   is(column: string, value: unknown): Filterable;
+  or(filters: string): Filterable;
   gte(column: string, value: string): Filterable;
   lte(column: string, value: string): Filterable;
   order(column: string, options: { ascending: boolean; nullsFirst: boolean }): Transformable;
@@ -164,6 +172,11 @@ function applyFilter(
   if (f.deadlineBefore) q = q.lte("deadline", f.deadlineBefore);
   if (f.openingBefore) q = q.lte("opening_date", f.openingBefore);
   if (f.verifiedOnly) q = q.not("source_verified_at", "is", null);
+  if (f.hasOfficialUrl) {
+    q = q.or(
+      "official_scholarship_url.not.is.null,official_university_url.not.is.null",
+    );
+  }
 
   return q;
 }

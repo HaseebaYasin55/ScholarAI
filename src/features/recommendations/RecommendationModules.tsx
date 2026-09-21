@@ -13,6 +13,17 @@ import { useScholarshipResultsStore } from "@/store/scholarshipResultsStore";
 import ScholarshipCard from "@/components/scholarships/ScholarshipCard";
 import { verifiedOfficialUrl } from "@/features/application-tracking/scholarshipApps";
 
+// Flagship programmes that should surface first when the catalog contains a
+// real, verified row for them and the user's profile matches. These are never
+// injected — if they are absent from the catalog they simply do not appear.
+const PRIORITY_PROGRAMS = ["daad", "stipendium hungaricum", "erasmus mundus"];
+
+function priorityRank(name: string): number {
+  const n = name.toLowerCase();
+  const rank = PRIORITY_PROGRAMS.findIndex((p) => n.includes(p));
+  return rank === -1 ? PRIORITY_PROGRAMS.length : rank;
+}
+
 interface PreferencesRow {
   degree_levels: string[];
   destinations: string[];
@@ -63,11 +74,17 @@ export default function RecommendationModules() {
           .select("degree_levels, destinations, funding_preferences, tuition_preference, ielts_status, ielts_band, preferred_field, max_tuition_budget, needs_application_fee_waiver, open_to_multiple_countries")
           .eq("user_id", user.id)
           .maybeSingle(),
-        // Only officially-verified catalog rows are recommended. Unverified
-        // (legacy/blocked) rows never reach the dashboard.
-        fetchScholarships(supabase, { limit: 60, filter: { verifiedOnly: true } }).catch(
-          () => [],
-        ),
+        // Recommend catalog rows that carry an official source URL. The
+        // client-side `verifiedOfficialUrl` gate below then rejects blocked or
+        // untrusted hosts, so real official rows are surfaced even when the
+        // pipeline's verification timestamp is absent (or its column is missing).
+        fetchScholarships(supabase, {
+          limit: 60,
+          filter: { hasOfficialUrl: true },
+        }).catch((err) => {
+          console.error("[recommendations] Catalog fetch failed:", err);
+          return [];
+        }),
       ]);
 
       if (cancelled) return;
@@ -84,10 +101,14 @@ export default function RecommendationModules() {
   // Live discovery fallback — when the DB catalog is empty, actually search the
   // web using the user's preferences so the dashboard is never dead content.
   useEffect(() => {
-    if (!user || loading || scholarships.length > 0 || !prefs) return;
+    if (!user || loading || scholarships.length > 0) return;
+    // Preferences may be missing (e.g. an incomplete row) — fall back to the
+    // profile's major so real recommendations can still be discovered.
     const preferredField =
-      prefs.preferred_field?.trim() || user.major?.trim() || "";
-    if (!preferredField && !prefs.destinations?.length && !prefs.degree_levels?.length) {
+      prefs?.preferred_field?.trim() || user.major?.trim() || "";
+    const destinations = prefs?.destinations ?? [];
+    const degreeLevels = prefs?.degree_levels ?? [];
+    if (!preferredField && destinations.length === 0 && degreeLevels.length === 0) {
       return;
     }
 
@@ -101,11 +122,13 @@ export default function RecommendationModules() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: preferredField,
-          filters: {
-            country: prefs.destinations?.[0] ?? null,
-            degreeLevels: prefs.degree_levels ?? [],
-            funding: (prefs.funding_preferences ?? []).find((f) => f !== "any") ?? null,
-          },
+          // When we have a field to search on, let the client-side matcher rank
+          // relevance instead of hard-filtering away real matches by the first
+          // preferred country/degree. The API only needs country/degree when
+          // there is no query at all.
+          filters: preferredField
+            ? {}
+            : { country: destinations[0] ?? null, degreeLevels },
           limit: 3,
         }),
       })
@@ -157,7 +180,12 @@ export default function RecommendationModules() {
     { field_of_study: user?.major ?? "" },
     matchPrefs,
   );
-  const topMatches = matched.slice(0, 3);
+  // Stable re-rank: flagship programmes first (only when they genuinely match),
+  // then the existing transparent score order for everything else.
+  const ranked = [...matched].sort(
+    (a, b) => priorityRank(a.scholarship.name) - priorityRank(b.scholarship.name),
+  );
+  const topMatches = ranked.slice(0, 3);
 
   return (
     <div className="mb-8 space-y-6">
@@ -206,7 +234,12 @@ export default function RecommendationModules() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {topMatches.map((m) => (
-                  <ScholarshipCard key={m.scholarship.id} scholarship={m.scholarship} match={m} />
+                  <ScholarshipCard
+                    key={m.scholarship.id}
+                    scholarship={m.scholarship}
+                    match={m}
+                    cta="scholarship"
+                  />
                 ))}
               </div>
               <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.16em] text-gray-400">
@@ -226,7 +259,12 @@ export default function RecommendationModules() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {topMatches.map((m) => (
-                <ScholarshipCard key={m.scholarship.id} scholarship={m.scholarship} match={m} />
+                <ScholarshipCard
+                  key={m.scholarship.id}
+                  scholarship={m.scholarship}
+                  match={m}
+                  cta="scholarship"
+                />
               ))}
               {matched.length > 3 && (
                 <Link

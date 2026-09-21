@@ -1,12 +1,12 @@
 "use client";
 
 import React from 'react';
-import { FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { FileText, CheckCircle, Clock } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { isCompletedStatus } from '../../application-tracking/status';
 
 export default function DashboardStats() {
-  const { applications, documents } = useAppStore();
+  const { applications } = useAppStore();
 
   const stats = [
     {
@@ -24,15 +24,10 @@ export default function DashboardStats() {
       value: applications.filter(a => !isCompletedStatus(a.status)).length,
       icon: Clock,
     },
-    {
-      label: 'Missing Docs',
-      value: documents.filter(d => d.status === 'Missing').length,
-      icon: AlertCircle,
-    },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
       {stats.map((stat) => (
         <div key={stat.label} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
           <div className="mb-4">
