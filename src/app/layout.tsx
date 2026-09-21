@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ScholarAI - Student Application Dashboard",
+  title: "ScholarAI",
   description: "AI-powered platform for managing university applications",
 };
 
