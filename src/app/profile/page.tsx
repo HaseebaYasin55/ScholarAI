@@ -607,7 +607,7 @@ export default function ProfilePage() {
       <main className="flex-1">
         <Header />
 
-        <div className="p-8 max-w-4xl mx-auto">
+        <div className="mx-auto max-w-4xl p-4 sm:p-8">
           {/* Page header */}
           <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
@@ -1118,7 +1118,7 @@ export default function ProfilePage() {
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
               {/* CV / Resume */}
-              <div className="flex items-center gap-4 p-6">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4 sm:p-6">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50 border border-gray-200">
                   <FileText className="h-5 w-5 text-gray-500" />
                 </span>
@@ -1160,7 +1160,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Transcript */}
-              <div className="flex items-center gap-4 p-6">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4 sm:p-6">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50 border border-gray-200">
                   <FileText className="h-5 w-5 text-gray-500" />
                 </span>
@@ -1202,8 +1202,8 @@ export default function ProfilePage() {
               </div>
 
               {/* Supporting documents */}
-              <div className="p-6">
-                <div className="mb-4 flex items-center justify-between gap-4">
+              <div className="p-4 sm:p-6">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Supporting Documents</p>
                     <p className="mt-0.5 text-xs text-gray-400">
@@ -1224,7 +1224,7 @@ export default function ProfilePage() {
                     {supportingDocs.map((doc) => (
                       <li
                         key={doc.id}
-                        className="flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4"
+                        className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-gray-200 bg-gray-50/60 p-4"
                       >
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">
                           <FileText className="h-5 w-5 text-gray-500" />

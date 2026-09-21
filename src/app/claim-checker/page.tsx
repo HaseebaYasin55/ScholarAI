@@ -166,7 +166,7 @@ export default function ClaimCheckerPage() {
       <main className="flex-1">
         <Header />
 
-        <div className="p-8 max-w-6xl mx-auto">
+        <div className="mx-auto max-w-6xl p-4 sm:p-8">
           {/* Page header */}
           <div className="mb-8">
             <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-gray-400">

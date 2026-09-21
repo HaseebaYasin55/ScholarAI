@@ -204,7 +204,7 @@ export default function ScholarshipDetailPage() {
 
         {/* Deadline banner */}
         {s.deadline && (
-          <div className="mb-6 flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <Calendar className="h-8 w-8 shrink-0 text-gray-400" />
             <div className="min-w-0 flex-1">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">

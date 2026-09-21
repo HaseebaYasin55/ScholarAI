@@ -21,7 +21,7 @@ export default function ClaimInput({
   return (
     <div className="space-y-5">
       {source && (source.university || source.program) && (
-        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-gray-200 bg-white px-4 py-3">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
             <GraduationCap className="h-4 w-4" />
           </span>

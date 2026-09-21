@@ -115,7 +115,7 @@ export default function ClaimResult({
             const Icon = config.icon;
             return (
               <div key={index} className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="flex items-start justify-between gap-4 px-5 py-4">
+                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 py-4">
                   <p className="flex-1 text-[15px] leading-relaxed text-gray-900">
                     {claim.text}
                   </p>

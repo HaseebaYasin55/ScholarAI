@@ -50,7 +50,7 @@ export default function DashboardPage() {
       <main className="flex-1">
         <Header />
 
-        <div className="p-8 max-w-7xl mx-auto">
+        <div className="mx-auto max-w-7xl p-4 sm:p-8">
           {/* Hero */}
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 mb-10">
             <div>

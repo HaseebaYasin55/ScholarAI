@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronDown, LogOut, UserRound, Settings2 } from "lucide-react";
+import { ChevronDown, LogOut, UserRound, Settings2, Menu, X } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
 const NAV_ITEMS = [
@@ -40,6 +40,7 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const displayName = user?.full_name || user?.email || "Student";
@@ -61,7 +62,10 @@ export default function Header() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        setMobileOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -112,7 +116,21 @@ export default function Header() {
           </nav>
         </div>
 
-        <div className="flex items-center">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setMobileOpen((o) => !o)}
+            aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav"
+            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-900/10 md:hidden"
+          >
+            {mobileOpen ? (
+              <X className="h-5 w-5 text-gray-700" />
+            ) : (
+              <Menu className="h-5 w-5 text-gray-700" />
+            )}
+          </button>
+
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setOpen((o) => !o)}
@@ -176,6 +194,30 @@ export default function Header() {
           </div>
         </div>
       </div>
+
+      {mobileOpen && (
+        <nav
+          id="mobile-nav"
+          aria-label="Primary"
+          className="absolute inset-x-0 top-full border-t border-gray-100 bg-white p-2 shadow-[0_18px_44px_-20px_rgba(0,0,0,0.35)] md:hidden"
+        >
+          {NAV_ITEMS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setMobileOpen(false)}
+              aria-current={isActive(item.href) ? "page" : undefined}
+              className={
+                isActive(item.href)
+                  ? "flex items-center justify-between rounded-lg bg-gray-900 px-3 py-3 text-sm font-semibold text-white transition-colors"
+                  : "flex items-center justify-between rounded-lg px-3 py-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+              }
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </header>
   );
 }
