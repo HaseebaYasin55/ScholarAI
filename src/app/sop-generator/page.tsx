@@ -39,9 +39,9 @@ const EMPTY_FORM: SOPFormValues = {
   program: "",
   wordLimit: "",
   requirements: "",
-  prompt: "",
-  additionalInfo: "",
 };
+
+const EMPTY_PREFILL: SOPPrefillSource = { university: "", program: "" };
 
 export default function SOPGeneratorPage() {
   const { user, isAuthenticated, isLoading } = useAuthStore();
@@ -49,25 +49,28 @@ export default function SOPGeneratorPage() {
   const router = useRouter();
 
   const [prefs, setPrefs] = useState<PrefsRow | null>(null);
-  const [formData, setFormData] = useState<SOPFormValues>(() => {
-    // One-shot scholarship context handoff from the Scholarship Journey.
+  // One-shot scholarship context handoff from the Scholarship Journey / the
+  // application preparation journey. Read once via lazy initializers — the
+  // application_id keeps a saved SOP linked to this tracked application.
+  const [prefill] = useState<SOPPrefillSource>(() => {
     try {
-      if (typeof window === "undefined") return EMPTY_FORM;
+      if (typeof window === "undefined") return EMPTY_PREFILL;
       const raw = window.sessionStorage.getItem(SOP_PREFILL_KEY);
-      if (!raw) return EMPTY_FORM;
-      const prefill = JSON.parse(raw) as SOPPrefillSource;
-      if (!prefill?.university && !prefill?.program) return EMPTY_FORM;
+      if (!raw) return EMPTY_PREFILL;
+      const parsed = JSON.parse(raw) as SOPPrefillSource;
+      if (!parsed?.university && !parsed?.program) return EMPTY_PREFILL;
       window.sessionStorage.removeItem(SOP_PREFILL_KEY);
-      return {
-        ...EMPTY_FORM,
-        university: prefill.university ?? "",
-        program: prefill.program ?? "",
-        requirements: prefill.requirements?.trim() ?? "",
-      };
+      return parsed;
     } catch {
-      return EMPTY_FORM;
+      return EMPTY_PREFILL;
     }
   });
+  const [formData, setFormData] = useState<SOPFormValues>(() => ({
+    ...EMPTY_FORM,
+    university: prefill.university ?? "",
+    program: prefill.program ?? "",
+    requirements: prefill.requirements?.trim() ?? "",
+  }));
   const [step, setStep] = useState<"form" | "generating" | "result">("form");
   const [result, setResult] = useState<SOPResponse | null>(null);
   const [error, setError] = useState("");
@@ -165,8 +168,6 @@ export default function SOPGeneratorPage() {
     program: formData.program.trim(),
     wordLimit,
     requirements: formData.requirements.trim(),
-    prompt: formData.prompt.trim(),
-    additionalInfo: formData.additionalInfo.trim(),
     profile: profileContext,
     mode,
     ...(current ? { currentContent: current.content, suggestions: current.suggestions } : {}),
@@ -234,7 +235,7 @@ export default function SOPGeneratorPage() {
     setIsSaving(true);
     try {
       await saveSOP({
-        application_id: null,
+        application_id: prefill?.application_id ?? null,
         university: formData.university.trim(),
         program: formData.program.trim(),
         content: result.content,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,6 +16,7 @@ import {
   GraduationCap,
   FileText,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import type { Document } from "@/store/appStore";
@@ -23,27 +24,22 @@ import { useAuthStore } from "@/store/authStore";
 import type { Scholarship } from "@/lib/scholarship/types";
 import type { MatchPreferences } from "@/lib/scholarship/match";
 import { daysUntil, formatLongDate } from "@/lib/scholarship/format";
+import { validateDocumentFile } from "@/lib/scholarship/documents";
 import { buildRequirementChecks, summarizeReadiness } from "@/lib/scholarship/journey";
 import type { RequirementCheck } from "@/lib/scholarship/journey";
 import { SOP_PREFILL_KEY } from "@/features/sop-generator/sopService";
-import { displayStatus } from "@/features/application-tracking/status";
+import { displayStatus, isAppliedLikeStatus } from "@/features/application-tracking/status";
+import {
+  applicationForScholarship,
+  applicationPayloadFromScholarship,
+  UNSELECTED_PROGRAM,
+  verifiedOfficialUrl,
+} from "@/features/application-tracking/scholarshipApps";
 
 type AuthUser = ReturnType<typeof useAuthStore.getState>["user"];
 
 const DOC_TYPE_CV = "CV / Resume";
 const DOC_TYPE_TRANSCRIPT = "Transcript";
-
-function validateDocumentFile(file: File): string | null {
-  const allowedExtensions = ["pdf", "doc", "docx"];
-  const fileExt = file.name.split(".").pop()?.toLowerCase();
-  if (!fileExt || !allowedExtensions.includes(fileExt)) {
-    return "Invalid file format. Please upload PDF, DOC, or DOCX.";
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    return "File size exceeds the 5MB limit.";
-  }
-  return null;
-}
 
 function DeadlineBadge({ deadline }: { deadline: string | null }) {
   const days = daysUntil(deadline);
@@ -201,46 +197,61 @@ export default function ScholarshipJourney({
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [refreshingPrograms, setRefreshingPrograms] = useState(false);
+  const [resolvedFields, setResolvedFields] = useState<string[]>([]);
+  const autoProgramCheck = useRef(false);
 
   const days = daysUntil(scholarship.deadline);
   const deadlinePassed = days !== null && days < 0;
 
-  // ── Restored journey (Draft = Preparing, Submitted = Applied) ─────────────
+  // ── Restored journey ─────────────────────────────────────────────────────────
   // Derived straight from the store rather than copied into state, so there's
-  // nothing to synchronize when applications finish loading. Both Draft and
-  // Submitted rows are restored so reopening an already-applied scholarship
-  // keeps its Applied state instead of creating a duplicate.
-  const universityKey = scholarship.name;
+  // nothing to synchronize when applications finish loading. Any application
+  // already created for this scholarship (via "I want to apply" or an earlier
+  // visit) restores the journey — no duplicate rows, Applied state preserved.
   const restoredJourney = useMemo(
-    () =>
-      applications.find(
-        (a) =>
-          a.university === universityKey &&
-          (a.status === "Draft" || a.status === "Submitted"),
-      ),
-    [applications, universityKey],
+    () => applicationForScholarship(applications, scholarship),
+    [applications, scholarship],
   );
 
+  const storedProgram =
+    restoredJourney &&
+    restoredJourney.program &&
+    restoredJourney.program !== UNSELECTED_PROGRAM
+      ? restoredJourney.program
+      : "";
   const establishedProgram =
-    confirmedProgram ?? (programInput.trim() || restoredJourney?.program || "");
+    confirmedProgram ?? (programInput.trim() || storedProgram);
 
-  // An application row that already exists for this university + program.
-  const existingApplication = useMemo(
-    () =>
-      applications.find(
-        (a) =>
-          a.university === universityKey && a.program === establishedProgram,
-      ),
-    [applications, universityKey, establishedProgram],
-  );
+  // Scholarship-specific program list, snapshotted from the catalog's `fields`.
+  // Only options actually associated with THIS scholarship are offered — never a
+  // global list. When the snapshot is empty the official page can be re-read
+  // (refreshProgramOptions) to recover the list without inventing anything.
+  const programOptions = useMemo(() => {
+    const base = [...(scholarship.fields ?? []), ...resolvedFields]
+      .map((f) => (f ?? "").trim())
+      .filter(Boolean);
+    const unique = Array.from(new Set(base));
+    return establishedProgram && !unique.includes(establishedProgram)
+      ? [establishedProgram, ...unique]
+      : unique;
+  }, [scholarship.fields, resolvedFields, establishedProgram]);
+  const hasProgramOptions = programOptions.length > 0;
 
-  // Applied only becomes true via the explicit "I've submitted my application"
+  // The application row to update. Keyed by scholarship identity (not program)
+  // so an Interested row with a placeholder program is updated once the user
+  // picks a real one, instead of creating a second row.
+  const existingApplication = restoredJourney;
+
+  // "Applied" only becomes true via the explicit "I've submitted my application"
   // confirmation — never just from opening the official website.
   const applied = useMemo(
     () =>
-      Boolean(restoredJourney && restoredJourney.status === "Submitted") ||
-      Boolean(existingApplication && existingApplication.status === "Submitted"),
-    [restoredJourney, existingApplication],
+      Boolean(
+        existingApplication &&
+          isAppliedLikeStatus(existingApplication.status),
+      ),
+    [existingApplication],
   );
 
   // An already-applied journey is always restored, even once the deadline
@@ -276,46 +287,131 @@ export default function ScholarshipJourney({
   );
 
   // ── Persist the journey in the applications table ─────────────────────────
-  // A "preparing" application is a Draft row (displayed as "Preparing" in the
-  // Dashboard) and an applied one is Submitted (displayed as "Applied"). The
-  // applications table has no scholarship column, so the scholarship name is
-  // stored in `university` and the row is keyed by name + program. It's only
-  // written once the user starts with a confirmed program, and the update
-  // branch never touches `status`, so marking a row Applied is preserved.
+  // Works with the single application row for this scholarship (created by
+  // "I want to apply" or a previous visit). Interesting rows start as
+  // "Interested"; a placeholder program is replaced once the user confirms a
+  // real one. The update branch never touches `status`, so a row marked
+  // Applied / Under Review / Interview is preserved.
   useEffect(() => {
     if (!canApply || !establishedProgram) return;
     if (existingApplication) {
-      if (existingApplication.progress !== readiness.pct) {
-        updateApplication(existingApplication.id, {
-          progress: readiness.pct,
-          ...(scholarship.deadline ? { deadline: scholarship.deadline } : {}),
-        }).catch(() => {
+      const updates: Record<string, unknown> = {
+        progress: readiness.pct,
+      };
+      if (
+        scholarship.deadline &&
+        existingApplication.deadline !== scholarship.deadline
+      ) {
+        updates.deadline = scholarship.deadline;
+      }
+      if (existingApplication.program !== establishedProgram) {
+        updates.program = establishedProgram;
+      }
+      if (
+        resolvedFields.length > 0 &&
+        JSON.stringify(existingApplication.fields ?? []) !==
+          JSON.stringify(resolvedFields)
+      ) {
+        updates.fields = resolvedFields;
+      }
+      if (
+        existingApplication.progress !== readiness.pct ||
+        updates.deadline !== undefined ||
+        updates.program !== undefined ||
+        updates.fields !== undefined
+      ) {
+        updateApplication(existingApplication.id, updates).catch(() => {
           // best-effort — the tracker should never block the journey
         });
       }
       return;
     }
-    const payload: Record<string, unknown> = {
-      university: universityKey,
-      program: establishedProgram,
-      status: "Draft",
+    const payload = {
+      ...applicationPayloadFromScholarship(scholarship, establishedProgram),
       progress: readiness.pct,
+      ...(resolvedFields.length > 0 ? { fields: resolvedFields } : {}),
     };
-    if (scholarship.deadline) payload.deadline = scholarship.deadline;
-    addApplication(payload as Parameters<typeof addApplication>[0]).catch(
-      () => {
-        // best-effort — the tracker should never block the journey
-      },
-    );
+    addApplication(payload).catch(() => {
+      // best-effort — the tracker should never block the journey
+    });
   }, [
     canApply,
     establishedProgram,
     existingApplication,
     addApplication,
     updateApplication,
-    universityKey,
+    scholarship,
     readiness.pct,
-    scholarship.deadline,
+    resolvedFields,
+  ]);
+
+  /**
+   * Re-read this scholarship's own official page to recover the eligible
+   * programs/fields when the saved snapshot has none. Values come only from the
+   * official page; when it lists no concrete programs the fallback stays.
+   */
+  const refreshProgramOptions = useCallback(async () => {
+    const url = verifiedOfficialUrl(scholarship);
+    if (!url) return;
+    setRefreshingPrograms(true);
+    try {
+      const res = await fetch("/api/scholarships/program-options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, name: scholarship.name }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { fields?: string[] }
+        | null;
+      const fields = (data?.fields ?? []).map((f) => f.trim()).filter(Boolean);
+      if (fields.length > 0) {
+        setResolvedFields(fields);
+        const app = applicationForScholarship(applications, scholarship);
+        if (app) {
+          await updateApplication(app.id, { fields }).catch(() => {
+            // best-effort — the manual fallback stays available
+          });
+        }
+      }
+    } catch {
+      // best-effort — the manual fallback stays available
+    } finally {
+      setRefreshingPrograms(false);
+    }
+  }, [scholarship, applications, updateApplication]);
+
+  // One automatic attempt per session for a scholarship with no program
+  // snapshot, so Step 2 can offer the dropdown without the user asking.
+  useEffect(() => {
+    if (autoProgramCheck.current) return;
+    if (!started || establishedProgram || hasProgramOptions) return;
+    if (!verifiedOfficialUrl(scholarship)) return;
+    const key = `program-options-checked:${scholarship.id}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+    } catch {
+      // storage unavailable — fall through to the in-memory guard
+    }
+    autoProgramCheck.current = true;
+    // Defer to a task so the refresh's setState does not run synchronously in
+    // the effect body (avoids a cascading render). The one-shot guard means the
+    // timer is scheduled at most once and is intentionally not cancelled, so
+    // React Strict Mode's mount/unmount double-invoke cannot swallow it.
+    setTimeout(() => {
+      void refreshProgramOptions().finally(() => {
+        try {
+          window.sessionStorage.setItem(key, "1");
+        } catch {
+          // ignore
+        }
+      });
+    }, 0);
+  }, [
+    started,
+    establishedProgram,
+    hasProgramOptions,
+    scholarship,
+    refreshProgramOptions,
   ]);
 
   const handleStart = () => {
@@ -348,7 +444,7 @@ export default function ScholarshipJourney({
     }
     setConfirming(true);
     try {
-      await updateApplication(appId, { status: "Submitted" });
+      await updateApplication(appId, { status: "Applied" });
       setSuccess(
         "Marked as applied — this scholarship now shows as Applied in your Dashboard.",
       );
@@ -422,8 +518,7 @@ export default function ScholarshipJourney({
     router.push("/sop-generator");
   };
 
-  const officialApplyUrl =
-    scholarship.officialScholarshipUrl ?? scholarship.officialUniversityUrl;
+  const officialApplyUrl = verifiedOfficialUrl(scholarship);
 
   const readyToApply =
     canApply && readiness.total > 0 && missingActions.length === 0;
@@ -535,7 +630,7 @@ export default function ScholarshipJourney({
                     "Deadline passed"
                   ) : (
                     <>
-                      I want to apply
+                      Start preparing your application
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -559,26 +654,81 @@ export default function ScholarshipJourney({
                     </h3>
                   </div>
                 </div>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <input
-                    value={establishedProgram}
-                    onChange={(e) => handleProgramChange(e.target.value)}
-                    placeholder="e.g. MSc Computer Science"
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
-                  />
-                  <button
-                    onClick={applyProgram}
-                    disabled={!establishedProgram || Boolean(confirmedProgram)}
-                    className="shrink-0 rounded-xl border border-gray-900 px-5 py-2.5 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {confirmedProgram ? "Saved" : "Confirm"}
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-gray-400">
-                  Official program lists aren&apos;t part of our scholarship data
-                  yet — enter the program exactly as shown on the official
-                  application page.
-                </p>
+                {hasProgramOptions ? (
+                  <>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <select
+                        value={establishedProgram}
+                        onChange={(e) => handleProgramChange(e.target.value)}
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-colors focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
+                      >
+                        <option value="">Select a program</option>
+                        {programOptions.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={applyProgram}
+                        disabled={!establishedProgram || Boolean(confirmedProgram)}
+                        className="shrink-0 rounded-xl border border-gray-900 px-5 py-2.5 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {confirmedProgram ? "Saved" : "Confirm"}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-400">
+                      Programs offered by this scholarship, taken from its
+                      official page.
+                    </p>
+                  </>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {refreshingPrograms ? (
+                      <p className="inline-flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 text-sm text-gray-600">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Checking the official page for program options…
+                      </p>
+                    ) : (
+                      <>
+                        <p className="rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 text-sm text-gray-600">
+                          Program options are not available in the scholarship
+                          data yet.
+                        </p>
+                        {verifiedOfficialUrl(scholarship) && (
+                          <button
+                            onClick={refreshProgramOptions}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-900 px-3.5 py-2 text-xs font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Check official page for program options
+                          </button>
+                        )}
+                      </>
+                    )}
+                    <div>
+                      <p className="text-[13px] text-gray-500">
+                        Enter the program exactly as shown on the official
+                        application page.
+                      </p>
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                        <input
+                          value={programInput}
+                          onChange={(e) => handleProgramChange(e.target.value)}
+                          placeholder="e.g. MSc Computer Science"
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
+                        />
+                        <button
+                          onClick={applyProgram}
+                          disabled={!establishedProgram || Boolean(confirmedProgram)}
+                          className="shrink-0 rounded-xl border border-gray-900 px-5 py-2.5 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {confirmedProgram ? "Saved" : "Confirm"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {canApply && (
@@ -823,7 +973,7 @@ export default function ScholarshipJourney({
                         You confirmed your submission on the provider&apos;s
                         website. This scholarship now shows as{" "}
                         <span className="font-semibold">
-                          {displayStatus("Submitted")}
+                          {displayStatus(existingApplication?.status ?? "Applied")}
                         </span>{" "}
                         in your Dashboard tracker.
                       </p>

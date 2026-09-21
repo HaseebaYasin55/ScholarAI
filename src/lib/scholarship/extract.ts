@@ -5,7 +5,13 @@
 // specified".
 
 import type { Scholarship } from "./types";
-import { scholarshipId, isGenericName, truncateText, isJunkUrl } from "./web";
+import {
+  scholarshipId,
+  isGenericName,
+  truncateText,
+  isJunkUrl,
+  hostCountry,
+} from "./web";
 import type { FetchedPage } from "./web";
 import { groqJSON, GroqError } from "./groq";
 
@@ -31,6 +37,8 @@ interface RawExtraction {
   ieltsRequirement: string;
   openingDate: string;
   deadline: string;
+  cycle: string;
+  applicationStatus: string;
   officialUniversityUrl: string;
   description: string;
   applicationInfo: string;
@@ -54,6 +62,31 @@ function cleanList(value: unknown): string[] {
     if (s && !out.includes(s)) out.push(s);
   }
   return out;
+}
+
+/**
+ * True when a value is a broad eligibility statement ("all academic
+ * disciplines", "any field of study", "open to all subjects", …) rather than a
+ * concrete eligible program/field. Such statements must NOT become program
+ * dropdown options — the UI keeps its manual fallback instead of inventing a
+ * list the official page never gave.
+ */
+function isBroadFieldStatement(value: string): boolean {
+  const s = value.trim().toLowerCase();
+  if (!s) return true;
+  return (
+    /^(all|any|every|various|multiple|other|open)\b[\s\S]{0,60}\b(disciplines?|fields?|subjects?|areas?|courses?|programs?|programmes?|studies|study)\b/.test(
+      s,
+    ) ||
+    /\b(open to all|across all|all academic disciplines|all disciplines|all fields of study|any discipline|any field of study|all subject areas|all areas of study|all programmes?)\b/.test(
+      s,
+    )
+  );
+}
+
+/** Eligible programs/fields — concrete values only, verbatim from the page. */
+function cleanFields(value: unknown): string[] {
+  return cleanList(value).filter((f) => !isBroadFieldStatement(f));
 }
 
 function cleanNumber(value: unknown): number | null {
@@ -173,6 +206,7 @@ function cleanName(value: string | null, title: string | undefined): string | nu
 function cleanOne(
   rawItem: Record<string, unknown>,
   page: FetchedPage,
+  verified = false,
 ): Scholarship | null {
   const name = cleanName(asString(rawItem, "name"), page.title);
   const nameFromTitle = name !== asString(rawItem, "name") && !cleanStr(asString(rawItem, "name"));
@@ -184,6 +218,20 @@ function cleanOne(
     (nameFromTitle ? cleanStr(page.title) : null);
   const eligibility = asString(rawItem, "eligibilityRequirements");
   const degreeLevels = asList(rawItem, "degreeLevels");
+
+  // Current application status read from the page ("open / closed / not open
+  // yet"), used verbatim; the UI derives a badge from it + the deadline.
+  const statusRaw = (asString(rawItem, "applicationStatus") ?? "").toLowerCase();
+  let currentStatus: Scholarship["currentStatus"] = null;
+  if (statusRaw) {
+    if (/\b(closed|expired|ended|no longer|not (?:currently )?accepting)\b/.test(statusRaw)) {
+      currentStatus = "closed";
+    } else if (/\b(upcoming|will open|not (?:yet|open)|opens?\s+(?:in|on))\b/.test(statusRaw)) {
+      currentStatus = "upcoming";
+    } else if (/\b(open|accepting|available|now)\b/.test(statusRaw)) {
+      currentStatus = "open";
+    }
+  }
 
   const hasSubstance =
     description !== null ||
@@ -205,7 +253,7 @@ function cleanOne(
     ),
     country: asString(rawItem, "country"),
     degreeLevels,
-    fields: asList(rawItem, "fields"),
+    fields: cleanFields(pick(rawItem, "fields", "eligiblePrograms", "programs", "fieldsOfStudy")),
     fundingType: normalizeFundingType(pick(rawItem, "fundingType")),
     tuitionCoverage: normalizeTuitionCoverage(pick(rawItem, "tuitionCoverage")),
     tuitionFee: cleanNumber(pick(rawItem, "tuitionFee")),
@@ -220,12 +268,141 @@ function cleanOne(
     ieltsRequirement: asString(rawItem, "ieltsRequirement"),
     openingDate: cleanDate(pick(rawItem, "openingDate")),
     deadline,
+    cycle: asString(rawItem, "cycle"),
     officialScholarshipUrl: page.url,
     officialUniversityUrl: asString(rawItem, "officialUniversityUrl"),
     sourceUrl: page.url,
     lastUpdated: page.fetchedAt,
+    officialSourceVerified: verified,
+    currentStatus,
     description,
     applicationInfo: asString(rawItem, "applicationInfo"),
+  };
+}
+
+// ─── Deterministic field scraper (offline data from the official page) ───────
+// Pulls truthful deadline / opening / funding / degree / country / cycle data
+// straight out of the fetched official page text. Used to keep cards complete
+// when LLM enrichment is rate-limited. Nothing is invented: a value only appears
+// if the page itself states it (country additionally from the host TLD).
+
+const DEGREE_TERMS: Array<[RegExp, string]> = [
+  [/\bbachelor(?:'s)?\b|\b(?:b\.?a\.?|b\.?s\.?c\.?|bsc|ba)\b|\bundergraduate\b/i, "Bachelor's"],
+  [/\bmaster(?:'s)?\b|\bgraduate degree\b/i, "Master's"],
+  [/\bph\.?d\.?\b|\bdoctoral\b|\bdoctorate\b|\bphd\s+scholarship\b/i, "PhD"],
+  [/\bmba\b|\bmaster\s+of\s+business/i, "MBA"],
+  [/\bpostgraduate\b|\bpost-graduate\b/i, "Postgraduate"],
+  [/\bpostdoc(?:toral)?\b|\bpost-doctoral\b/i, "Postdoctoral"],
+];
+
+const CYCLE_RE =
+  /\b(?:(?:winter|summer|spring|fall|autumn)\s+semester|academic\s+year|admission\s+(?:round|cycle)?)\s*\b(?:20\d{2}\s*[/–-]\s*(?:20)?\d{2}|20\d{2}\s*(?:cycle|round|intake)?)\b/i;
+
+function scrapeDateNearKeyword(
+  text: string,
+  keywords: RegExp,
+  offsetBefore = 80,
+  offsetAfter = 220,
+): { date: string; cycle: string | null } | null {
+  const pattern = new RegExp(keywords.source, `${keywords.flags.replace("g", "") || ""}i`);
+  const m = pattern.exec(text);
+  if (!m) return null;
+  const start = Math.max(0, m.index - offsetBefore);
+  const snippet = text.slice(start, m.index + m[0].length + offsetAfter);
+  const date = cleanDate(snippet);
+  if (!date) return null;
+  const cycle = snippet.match(CYCLE_RE)?.[0]?.replace(/\s+/g, " ") ?? null;
+  return { date, cycle };
+}
+
+function scrapeExtraction(page: FetchedPage): Partial<Scholarship> {
+  const text = page.text.replace(/\r/g, " ").replace(/[ \t]+/g, " ").slice(0, 80_000);
+
+  // ── Deadline (keyword-anchored; never guessed) ─────────────────────────────
+  let deadline: string | null = null;
+  let openingDate: string | null = null;
+  let cycle: string | null = null;
+  if (!/\b(?:no\s+deadline|rolling\s+admission|rolling\s+application|open\s+year\s*-\s*round)\b/i.test(text)) {
+    const dm = scrapeDateNearKeyword(
+      text,
+      /\b(?:deadline|closing\s+date|application\s+deadline|closes|apply\s+by|must\s+be\s+submitted\s+by|last\s+day\s+to\s+apply|applications?\s+(?:close|received)\s+by)\b/,
+    );
+    if (dm) {
+      deadline = dm.date;
+      cycle = dm.cycle ?? cycle;
+    }
+  }
+
+  // ── Opening date ("applications open from 1 March 2027") ───────────────────
+  const om = scrapeDateNearKeyword(
+    text,
+    /\b(?:application\s+period|applications?\s+open|opening\s+date|opens?\s+on|accepting\s+applications?\s+as\s+of)\b/,
+  );
+  if (om) {
+    openingDate = om.date;
+    cycle = om.cycle ?? cycle;
+  }
+  const cyc = text.match(CYCLE_RE);
+  if (cyc) cycle = cyc[0].replace(/\s+/g, " ");
+
+  // ── Funding / stipend ──────────────────────────────────────────────────────
+  let fundingType: string | null = null;
+  let tuitionCoverage: string | null = null;
+  let stipendAmount: number | null = null;
+  let stipendFrequency: string | null = null;
+  if (/\bfully\s+funded\b|\bfully\s+financed\b|\bfull\s+funding\b/i.test(text)) {
+    fundingType = "Fully funded";
+  } else if (
+    /\bfull\s+tuition\b|\btuition\s+fee\s+(?:waiver|waived)|\bcovers?\s+full\s+tuition\b/i.test(text)
+  ) {
+    fundingType = "Tuition fee waiver";
+    tuitionCoverage = "Full tuition";
+  } else if (/\bpartial(?:ly)?\s+funded\b|\bpartial\s+tuition\b/i.test(text)) {
+    fundingType = "Partially funded";
+    tuitionCoverage = "Partial tuition";
+  }
+  const amount = text.match(
+    /\b((?:€|EUR|US\$|\$|USD|£|GBP)\s?\d[\d,.]*|\d[\d,.]*\s?(?:€|EUR|US\$|\$|USD|£|GBP))\b\s*(?:per\s*|a\s*)?(month|year|annum|semester)?\b/i,
+  );
+  if (amount) {
+    const raw = amount[1].replace(/[^\d.]/g, "");
+    stipendAmount = Number(raw) || null;
+    if (amount[2]) {
+      stipendFrequency = amount[2].toLowerCase().startsWith("month")
+        ? "monthly"
+        : amount[2].toLowerCase().startsWith("semester")
+          ? "per semester"
+          : "annually";
+    }
+  }
+
+  // ── Degree level(s) present on the official page ───────────────────────────
+  const degreeLevels: string[] = [];
+  for (const [re, label] of DEGREE_TERMS) {
+    if (re.test(text) && !degreeLevels.includes(label)) degreeLevels.push(label);
+  }
+
+  // ── Country: host TLD is a real property of the official source ────────────
+  const country = hostCountry(page.url);
+
+  const applyMatch = text.match(
+    /(?:how\s+to\s+apply|application\s+via|you\s+can\s+apply|submit\s+(?:your\s+)?application)[^.!?]{0,220}/i,
+  );
+  const applicationInfo = applyMatch
+    ? applyMatch[0].replace(/\s+/g, " ").trim()
+    : null;
+
+  return {
+    deadline,
+    openingDate,
+    cycle,
+    fundingType,
+    tuitionCoverage,
+    stipendAmount,
+    stipendFrequency,
+    degreeLevels: degreeLevels.slice(0, 4),
+    country,
+    applicationInfo,
   };
 }
 
@@ -234,7 +411,7 @@ function cleanOne(
 // results never vanish. Built strictly from real page data — the page's title,
 // its meta description and its own URL — never invented content.
 
-export function fallbackRecord(page: FetchedPage): Scholarship {
+export function fallbackRecord(page: FetchedPage, verified = false): Scholarship {
   const bareHost =
     page.host === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(page.host)
       ? ""
@@ -254,18 +431,20 @@ export function fallbackRecord(page: FetchedPage): Scholarship {
     truncateText(page.text, 220).replace(/\s+/g, " ").trim() ||
     null;
 
+  const scraped = scrapeExtraction(page);
+
   return {
     id: scholarshipId(page.url),
     name,
     university,
-    country: null,
-    degreeLevels: [],
+    country: scraped.country ?? null,
+    degreeLevels: scraped.degreeLevels ?? [],
     fields: [],
-    fundingType: null,
-    tuitionCoverage: null,
+    fundingType: scraped.fundingType ?? null,
+    tuitionCoverage: scraped.tuitionCoverage ?? null,
     tuitionFee: null,
-    stipendAmount: null,
-    stipendFrequency: null,
+    stipendAmount: scraped.stipendAmount ?? null,
+    stipendFrequency: scraped.stipendFrequency ?? null,
     accommodationSupport: null,
     travelAllowance: null,
     healthInsurance: null,
@@ -273,14 +452,17 @@ export function fallbackRecord(page: FetchedPage): Scholarship {
     eligibilityRequirements: null,
     requiredDocuments: [],
     ieltsRequirement: null,
-    openingDate: null,
-    deadline: null,
+    openingDate: scraped.openingDate ?? null,
+    deadline: scraped.deadline ?? null,
+    cycle: scraped.cycle ?? null,
     officialScholarshipUrl: page.url,
     officialUniversityUrl: null,
     sourceUrl: page.url,
     lastUpdated: page.fetchedAt,
+    officialSourceVerified: verified,
+    currentStatus: null,
     description,
-    applicationInfo: null,
+    applicationInfo: scraped.applicationInfo ?? null,
   };
 }
 
@@ -343,19 +525,23 @@ const DISCOVERY_SCHEMA_DOC = `{
   ]
 }`;
 
-function discoveryPrompt(pages: FetchedPage[], context: { query: string }): string {
+function discoveryPrompt(
+  pages: FetchedPage[],
+  context: { query: string; named?: string | null },
+): string {
   const blocks = pages.map(
     (page, i) => `PAGE ${i + 1}
 SOURCE_URL: ${page.url}
 PAGE_TITLE: ${page.title || "unknown"}
 CONTENT:
-${truncateText(page.text, 1_600)}`,
+${truncateText(page.text, 2_400)}`,
   );
 
   return `You are a meticulous scholarship researcher.
 
 A search was run for:
 "${context.query}"
+${context.named ? `The user is searching for a SPECIFIC programme/scholarship: "${context.named}".` : ""}
 
 Below are ${pages.length} scraped web pages returned by that search. For EACH page
 identify the CONCRETE, INDIVIDUAL scholarship opportunities a specific student could
@@ -372,6 +558,7 @@ For each named scholarship capture ONLY facts actually stated on the page:
 - "officialUrl": an official application or scholarship page URL LITERALLY present in this
   page's text (copy it exactly). If the page itself is a single specific scholarship, use
   SOURCE_URL. Empty if there is none on the page.
+${context.named ? `\nSCOPE RULE: when a specific programme ("${context.named}") is being searched, ONLY return that exact programme if it appears on the page; a page that does not cover it gets "scholarships": [].` : ""}
 
 Rules:
 - NEVER invent a name, organization, country, or URL.
@@ -388,7 +575,7 @@ ${blocks.join("\n\n--- PAGE BREAK ---\n\n")}`;
 
 export async function discoverNamedScholarships(
   pages: FetchedPage[],
-  context: { query: string },
+  context: { query: string; named?: string | null },
 ): Promise<NamedScholarship[]> {
   if (pages.length === 0) return [];
 
@@ -484,17 +671,73 @@ const JSON_SCHEMA_DOC = `{
   "ieltsRequirement": "",
   "openingDate": "",
   "deadline": "",
+  "cycle": "",
+  "applicationStatus": "",
   "officialUniversityUrl": "",
   "description": "",
   "applicationInfo": ""
 }`;
 
+// ─── Targeted context (bounded, fast LLM input) ──────────────────────────────
+// Sending every byte of a page makes extraction slower, pricier and more
+// rate-limit-prone without better results. Instead we pull ONLY the regions a
+// real deadline/funding/eligibility/application statement lives in — weighted,
+// then capped — plus the page intro. The batch stays small (~2.8k chars/page)
+// so ONE Groq call can cover all verified candidates.
+
+const KEYWORD_REGIONS: Array<[RegExp, number]> = [
+  [
+    /\bapplication deadline\b|\bdeadline\b|\bclosing date\b|\bapply by\b|\bapplications? (?:close|closing)\b|\blast day\b|\bsubmit by\b/gi,
+    900,
+  ],
+  [/\bapplication period\b|\bapplications? open\b|\bopening date\b|\bhow to apply\b/gi, 700],
+  // Eligible programs / fields of study — the source of the Step 2 program
+  // dropdown. Must be captured verbatim; never expanded or inferred.
+  [
+    /\b(?:eligible|target|available|offered|participating)\s+(?:fields?|programs?|programmes?|subjects?|disciplines?|courses?)\b|\bfields? of study\b|\bsubject areas?\b|\bcourses? of study\b|\bdegree (?:programs?|programmes?)\b|\bstudy (?:programs?|programmes?)\b|\bbranches? of study\b/gi,
+    650,
+  ],
+  [/\b(?:scholarship|bursary|grant|fellowship|stipend)\b/gi, 400],
+  [/\b(?:funding|fully funded|financial aid|covers tuition)\b/gi, 350],
+  [/\beligibility\b|\beligible\b|\bcandidate must\b|\brequirements\b/gi, 250],
+  [/\binternational (?:students|applicants)\b/gi, 120],
+];
+
+function targetedPageText(page: FetchedPage, budget = 2_800): string {
+  const text = page.text;
+  const regions: Array<{ start: number; weight: number }> = [];
+  for (const [re, weight] of KEYWORD_REGIONS) {
+    for (const m of text.matchAll(re)) {
+      if (regions.some((r) => m.index >= r.start && m.index - r.start < 500)) continue;
+      regions.push({ start: m.index, weight });
+    }
+  }
+  regions.sort((a, b) => b.weight - a.weight || a.start - b.start);
+
+  const chosen: Array<{ start: number; end: number }> = [];
+  for (const r of regions) {
+    if (chosen.some((c) => r.start >= c.start && r.start <= c.end)) continue;
+    chosen.push({
+      start: Math.max(0, r.start - 90),
+      end: Math.min(text.length, r.start + 430),
+    });
+    if (chosen.length >= 6) break;
+  }
+
+  const segments = [
+    text.slice(0, 480),
+    ...chosen.map((c) => text.slice(c.start, c.end)),
+  ]
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const joined = segments.join(" ");
+  return truncateText(joined, budget) || text.slice(0, budget);
+}
+
 function batchPrompt(pages: FetchedPage[], context: { query: string }): string {
-  // Keep total batch tokens modest: Groq free tier allows ~8k TPM, and a
-  // full 6-page batch stays well under a single request's limit when each
-  // page contributes ~1600 chars (~400-500 tokens).
   const blocks = pages.map((page, i) => {
-    const text = truncateText(page.text, 1_600);
+    const text = targetedPageText(page);
     return `PAGE ${i + 1}
 SOURCE_URL: ${page.url}
 PAGE_TITLE: ${page.title || "unknown"}
@@ -513,8 +756,25 @@ never invent:
 
 - If a value is not on the page leave the field empty ("" or []).
 - The deadline is only a concrete application deadline stated for this opportunity.
+- "applicationStatus": the page's CURRENT explicit status for this opportunity,
+  one of "open", "upcoming", "closed", "expired" — or empty when the page does not
+  state a current cycle status. Example signals: "applications open" → open;
+  "applications open from 1 March 2027" → upcoming; "applications closed" /
+  "no longer accepting applications" → closed; "ended" / "programme ended" → expired.
+- "cycle": the application cycle/intake year this opening/deadline/status belongs to
+  when the page states it (e.g. "2026/27", "2027 intake", "Round 2, 2027"). Empty if
+  the page does not state a cycle. This helps us never present an OLD cycle as current.
 - Money fields (tuitionFee, stipendAmount, applicationFee) are plain numbers (no "$", no commas).
 - degreeLevels are one of: Bachelor, Master, PhD.
+- "fields": the specific eligible programs / fields of study / subjects this
+  scholarship explicitly says it is open to, copied verbatim from the page.
+  Return ONE distinct program/field per array element (never join several into
+  one comma-separated string), e.g. ["Computer Science", "Economics"]. Never
+  normalize, rename, translate, expand, or infer. Do NOT return generic
+  eligibility phrases such as "all academic disciplines", "all fields",
+  "any subject", "open to all", "various disciplines" — those mean the page
+  does NOT list programs, so leave []. Leave [] whenever the page does not
+  explicitly name eligible programs/fields.
 - fundingType is one of: "Fully funded", "Partially funded", "Tuition fee waiver", "Funding available" — or empty.
 - tuitionCoverage is one of: "Full tuition", "Partial tuition", "Tuition + living costs", "Not covered" — or empty.
 - officialUniversityUrl must be a URL literally present on the page (or empty).
@@ -542,8 +802,10 @@ ${blocks.join("\n\n--- PAGE BREAK ---\n\n")}`;
 export async function extractScholarshipsBatch(
   pages: FetchedPage[],
   context: { query: string },
+  options?: { verified?: boolean },
 ): Promise<Array<Scholarship | null>> {
   if (pages.length === 0) return [];
+  const verified = options?.verified === true;
 
   let raw: Array<Record<string, unknown>>;
   try {
@@ -571,13 +833,13 @@ export async function extractScholarshipsBatch(
     } else {
       console.error("[extract] Batch extraction failed:", err);
     }
-    return pages.map((page) => fallbackRecord(page));
+    return pages.map((page) => fallbackRecord(page, verified));
   }
 
   return pages.map((page, i) => {
     const item = raw[i];
     if (!item) return null;
-    const result = cleanOne(item, page);
+    const result = cleanOne(item, page, verified);
     if (!result) {
       console.error(`[extract] Skipped (no/invalid name or no substance) ${page.url}`);
     }
@@ -588,7 +850,10 @@ export async function extractScholarshipsBatch(
 export async function extractScholarship(
   page: FetchedPage,
   context: { query: string },
+  verified = false,
 ): Promise<Scholarship | null> {
-  const [result] = await extractScholarshipsBatch([page], context);
+  const [result] = await extractScholarshipsBatch([page], context, {
+    verified,
+  });
   return result ?? null;
 }

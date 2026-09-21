@@ -51,8 +51,9 @@ export function setCached<T>(key: string, value: T, ttlMs = TTL_MS): void {
 
 // The write path below is a deliberate no-op without a service role key — the
 // `scholarships` table's RLS blocks writes from the anon key. When the key is
-// configured, discoveries are upserted (deduped by source_url) so the dashboard
-// catalog eventually benefits too.
+// configured, VERIFIED discoveries are upserted (deduped by source_url) so the
+// dashboard catalog eventually benefits too. Unverified results are never
+// persisted, so the catalog only ever contains officially-verified sources.
 export async function persistResults(results: import("./types").Scholarship[]): Promise<void> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -64,6 +65,7 @@ export async function persistResults(results: import("./types").Scholarship[]): 
 
     for (const s of results) {
       if (!s.sourceUrl) continue;
+      if (!s.officialSourceVerified) continue; // NEVER persist unverified rows
       const { data: existing } = await client
         .from("scholarships")
         .select("id")
@@ -93,6 +95,8 @@ export async function persistResults(results: import("./types").Scholarship[]): 
         official_scholarship_url: s.officialScholarshipUrl,
         official_university_url: s.officialUniversityUrl,
         source_url: s.sourceUrl,
+        current_status: s.currentStatus ?? null,
+        source_verified_at: new Date().toISOString(),
         last_updated: new Date().toISOString(),
       };
 

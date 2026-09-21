@@ -7,6 +7,7 @@ import Header from "@/components/Header";
 import {
   ArrowLeft,
   Calendar,
+  Check,
   ExternalLink,
   Globe2,
   FileText,
@@ -22,7 +23,11 @@ import { useScholarshipResultsStore } from "@/store/scholarshipResultsStore";
 import { matchScholarship } from "@/lib/scholarship/match";
 import type { MatchPreferences } from "@/lib/scholarship/match";
 import { daysUntil, formatDate, formatLongDate } from "@/lib/scholarship/format";
-import ScholarshipJourney from "@/features/scholarship-journey/ScholarshipJourney";
+import { scholarshipStatus } from "@/lib/scholarship/scholarship-status";
+import StatusBadge from "@/components/scholarships/StatusBadge";
+import AddToApplications from "@/features/application-tracking/AddToApplications";
+import { verifiedOfficialUrl } from "@/features/application-tracking/scholarshipApps";
+import { isOfficialApproved } from "@/features/application-tracking/scholarshipApps";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -92,9 +97,17 @@ export default function ScholarshipDetailPage() {
         });
       }
 
-      const found = storeHit
+      let found = storeHit
         ? storeHit
         : await getScholarshipById(supabase, id).catch(() => null);
+
+      // Catalog rows must clear the official-source gate: a persisted scholarship
+      // with no acceptable official URL (blocked/aggregator/unverified) is not
+      // worth opening — treat it as not found like any other stale record.
+      if (found && !ephemeral && verifiedOfficialUrl(found) === null) {
+        found = null;
+      }
+
       if (cancelled) return;
       setScholarship(found);
       if (!found) {
@@ -146,8 +159,13 @@ export default function ScholarshipDetailPage() {
   }
 
   const s = scholarship;
-  const applyUrl = s.officialScholarshipUrl ?? s.officialUniversityUrl;
+  const officialUrl = verifiedOfficialUrl(s);
+  const official = isOfficialApproved(s);
   const daysToDeadline = daysUntil(s.deadline);
+
+  // Unified current-status derivation: verifier verdict first, then
+  // deadline/opening-date heuristics ("Deadline not announced" never guesses).
+  const status = scholarshipStatus(s);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -164,12 +182,24 @@ export default function ScholarshipDetailPage() {
           </p>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">{s.name}</h1>
           <p className="mt-1 text-sm text-gray-500">{s.university ?? "—"}</p>
-          {id.startsWith("web_") && (
-            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-[0.16em] text-gray-400">
-              <RefreshCw className="h-3 w-3" />
-              Live discovery result
-            </p>
-          )}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {official && (
+              <span
+                title="Verified against the authoritative official source"
+                className="inline-flex items-center gap-1 rounded-full bg-gray-900 px-2.5 py-0.5 text-[11px] font-semibold tracking-tight text-white"
+              >
+                <Check className="h-3 w-3" />
+                Official
+              </span>
+            )}
+<StatusBadge status={status} />
+            {id.startsWith("web_") && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-[0.16em] text-gray-400">
+                <RefreshCw className="h-3 w-3" />
+                Live discovery result
+              </span>
+            )}
+          </div>
         </header>
 
         {/* Deadline banner */}
@@ -206,8 +236,36 @@ export default function ScholarshipDetailPage() {
           </div>
         )}
 
-        {/* Application preparation journey */}
-        <ScholarshipJourney scholarship={s} user={user} prefs={prefs} />
+        {/* Official Page */}
+        {officialUrl && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Globe2 className="h-8 w-8 shrink-0 text-gray-400" />
+              <div>
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                  Official Page
+                </p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {s.university ?? s.name}
+                </p>
+              </div>
+            </div>
+            <a
+              href={officialUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gray-900/15 bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-gray-800"
+            >
+              Open Official Website
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </div>
+        )}
+
+        {/* Add to my applications */}
+        <div className="mb-6">
+          <AddToApplications scholarship={s} />
+        </div>
 
         {/* Profile Match */}
         {match && (
@@ -251,48 +309,6 @@ export default function ScholarshipDetailPage() {
         )}
 
         <div className="space-y-5">
-          {/* Overview */}
-          <Section title="Overview">
-            <Row label="Scholarship" value={s.name} />
-            <Row label="University" value={s.university} />
-            <Row label="Country" value={s.country} />
-            <Row label="Degree level" value={s.degreeLevels.join(", ")} />
-            <Row label="Field" value={s.fields.join(", ")} />
-            <Row label="Opening date" value={formatDate(s.openingDate)} />
-            <Row label="Deadline" value={formatDate(s.deadline)} />
-            {s.description && (
-              <div className="mt-3 rounded-lg bg-gray-50 p-3 text-[13px] leading-relaxed text-gray-600">
-                <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">About this scholarship</p>
-                <p>{s.description}</p>
-              </div>
-            )}
-            {s.eligibilityRequirements && (
-              <div className="mt-3 rounded-lg bg-gray-50 p-3 text-[13px] leading-relaxed text-gray-600">
-                <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">Eligibility conditions</p>
-                <p className="whitespace-pre-line">{s.eligibilityRequirements}</p>
-              </div>
-            )}
-          </Section>
-
-          {/* Funding */}
-          <Section title="Funding">
-            <Row label="Funding type" value={s.fundingType} />
-            <Row label="Tuition coverage" value={s.tuitionCoverage} />
-            <Row label="Tuition fee" value={s.tuitionFee != null ? s.tuitionFee.toLocaleString("en-US") : null} />
-            <Row
-              label="Stipend"
-              value={
-                s.stipendAmount != null
-                  ? `${s.stipendAmount.toLocaleString("en-US")}${s.stipendFrequency ? ` / ${s.stipendFrequency}` : ""}`
-                  : null
-              }
-            />
-            <Row label="Accommodation" value={s.accommodationSupport} />
-            <Row label="Travel allowance" value={s.travelAllowance} />
-            <Row label="Health insurance" value={s.healthInsurance} />
-            <Row label="Application fee" value={s.applicationFee != null ? s.applicationFee.toLocaleString("en-US") : null} />
-          </Section>
-
           {/* Requirements */}
           {(s.requiredDocuments.length > 0 || s.ieltsRequirement) && (
             <Section title="Requirements">
@@ -317,41 +333,6 @@ export default function ScholarshipDetailPage() {
                 <p className="text-xs text-gray-400">Application deadline</p>
               </div>
             </div>
-          </Section>
-
-          {/* Application */}
-          <Section title="Apply">
-            {applyUrl ? (
-              <a
-                href={applyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_6px_14px_rgba(0,0,0,0.25)] transition-all hover:bg-gray-800 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_10px_20px_rgba(0,0,0,0.3)]"
-              >
-                <ExternalLink className="h-4 w-4" />
-                View Official Scholarship
-              </a>
-            ) : (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-[13px] text-gray-600">
-                Official application page is not available yet for this scholarship.
-              </div>
-            )}
-            {s.applicationInfo && (
-              <div className="mt-4 rounded-lg bg-gray-50 p-3 text-[13px] leading-relaxed text-gray-600">
-                <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">How to apply</p>
-                <p className="whitespace-pre-line">{s.applicationInfo}</p>
-              </div>
-            )}
-            {s.officialUniversityUrl && s.officialScholarshipUrl && (
-              <a
-                href={s.officialUniversityUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900"
-              >
-                <Globe2 className="h-3.5 w-3.5" /> Official university page
-              </a>
-            )}
           </Section>
 
           {/* Source / freshness */}

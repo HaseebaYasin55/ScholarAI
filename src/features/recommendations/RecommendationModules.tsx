@@ -11,6 +11,7 @@ import type { MatchPreferences } from "@/lib/scholarship/match";
 import type { Scholarship } from "@/lib/scholarship/types";
 import { useScholarshipResultsStore } from "@/store/scholarshipResultsStore";
 import ScholarshipCard from "@/components/scholarships/ScholarshipCard";
+import { verifiedOfficialUrl } from "@/features/application-tracking/scholarshipApps";
 
 interface PreferencesRow {
   degree_levels: string[];
@@ -62,7 +63,11 @@ export default function RecommendationModules() {
           .select("degree_levels, destinations, funding_preferences, tuition_preference, ielts_status, ielts_band, preferred_field, max_tuition_budget, needs_application_fee_waiver, open_to_multiple_countries")
           .eq("user_id", user.id)
           .maybeSingle(),
-        fetchScholarships(supabase, { limit: 60 }).catch(() => []),
+        // Only officially-verified catalog rows are recommended. Unverified
+        // (legacy/blocked) rows never reach the dashboard.
+        fetchScholarships(supabase, { limit: 60, filter: { verifiedOnly: true } }).catch(
+          () => [],
+        ),
       ]);
 
       if (cancelled) return;
@@ -140,7 +145,11 @@ export default function RecommendationModules() {
         open_to_multiple_countries: true,
       };
 
-  const catalog = scholarships.length > 0 ? scholarships : live;
+  // Client-side re-check on top of the server-side gates: anything without an
+  // acceptable verified official URL is never recommended, period.
+  const catalog = (scholarships.length > 0 ? scholarships : live).filter(
+    (s) => verifiedOfficialUrl(s) !== null,
+  );
   const liveActive = scholarships.length === 0 && live.length > 0;
 
   const matched = matchScholarships(

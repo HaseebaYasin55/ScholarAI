@@ -18,6 +18,9 @@ export interface WebResult {
   url: string;
   snippet: string;
   rank: number;
+  /** Number of distinct search queries that surfaced this URL (set by the
+   *  orchestrator when aggregating multiple queries; 1 when unused). */
+  hits?: number;
 }
 
 const FUNDING_TERMS: Record<string, string> = {
@@ -154,7 +157,7 @@ function parseDuckLite(html: string): WebResult[] {
 
 // ─── Search execution ────────────────────────────────────────────────────────
 
-const SEARCH_TIMEOUT_MS = 12_000;
+const SEARCH_TIMEOUT_MS = 7_000;
 const USER_AGENT =
   "Mozilla/5.0 (compatible; ScholarAI-Discovery/1.0; +https://scholarai.local)";
 

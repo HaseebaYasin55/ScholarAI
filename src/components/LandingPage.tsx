@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { Fragment } from "react";
-import { ArrowUpRight, Award, Calendar, Check, FileText } from "lucide-react";
+import {
+  ArrowUpRight,
+  Calendar,
+  Check,
+  ClipboardList,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import Logo from "@/components/Logo";
 
 const STRIP = ["Scholarships", "Documents", "SOPs", "Deadlines", "Eligibility"];
@@ -175,7 +182,7 @@ export default function LandingPage() {
               className="absolute bottom-6 top-6 left-[19px] w-px bg-gray-200 sm:left-[23px]"
             />
 
-            {/* 01 · Discover */}
+            {/* 01 · Discover Scholarships */}
             <div
               className="rise-in relative flex items-start gap-5 sm:gap-7"
               style={{ animationDelay: "320ms" }}
@@ -184,15 +191,15 @@ export default function LandingPage() {
               <div className="min-w-0 flex-1 -rotate-1 sm:max-w-[82%] sm:-mr-5">
                 <CardShell variant="soft">
                   <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-gray-400">
-                    Find funding
+                    Discover Scholarships
                   </p>
                   <div className="mt-4 flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-900 text-white">
-                      <Award className="h-4 w-4" />
+                      <Search className="h-4 w-4" />
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-gray-800">
-                        Rhodes Scholarship
+                        Verified from official sources
                       </p>
                       <p className="truncate text-[11px] text-gray-400">
                         Matched to your profile
@@ -201,23 +208,23 @@ export default function LandingPage() {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[10px] font-medium text-white">
-                      Field
+                      Country
                     </span>
                     <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[10px] font-medium text-white">
                       Degree
                     </span>
                     <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-400">
-                      GPA
+                      Field
                     </span>
                     <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-400">
-                      Language
+                      Funding
                     </span>
                   </div>
                 </CardShell>
               </div>
             </div>
 
-            {/* 02 · Prepare */}
+            {/* 02 · Build Application */}
             <div
               className="rise-in relative flex items-start gap-5 sm:gap-7"
               style={{ animationDelay: "420ms" }}
@@ -226,65 +233,113 @@ export default function LandingPage() {
               <div className="min-w-0 flex-1">
                 <CardShell>
                   <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-gray-400">
-                    Build your application
+                    Build Application
                   </p>
                   <ul className="mt-4 divide-y divide-gray-100">
                     <li className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 text-sm text-gray-700">
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white">
                         <Check className="h-3 w-3" />
                       </span>
-                      <span className="truncate">Statement of Purpose</span>
+                      <span className="truncate">Choose your program</span>
                       <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400">
-                        Drafted
+                        Selected
                       </span>
                     </li>
                     <li className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 text-sm text-gray-700">
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white">
                         <Check className="h-3 w-3" />
                       </span>
-                      <span className="truncate">Transcripts</span>
+                      <span className="truncate">Review requirements</span>
                       <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400">
-                        Uploaded
+                        Confirmed
                       </span>
                     </li>
                     <li className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 text-sm text-gray-700">
                       <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
-                      <span className="truncate">Recommendations</span>
+                      <span className="truncate">Start preparation</span>
                       <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400">
-                        2 of 3
+                        In progress
                       </span>
                     </li>
                   </ul>
                   <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">
-                    <span>Status</span>
-                    <span className="text-gray-600">2 of 3 ready</span>
+                    <span>Application</span>
+                    <span className="text-gray-600">Preparing</span>
                   </div>
                 </CardShell>
               </div>
             </div>
 
-            {/* 03 · Apply */}
+            {/* 03 · Prepare Documents & SOP */}
             <div
               className="rise-in relative flex items-start gap-5 sm:gap-7"
               style={{ animationDelay: "520ms" }}
             >
-              <Stamp index="03" state="destination" />
+              <Stamp index="03" state="solid" />
               <div className="min-w-0 flex-1 rotate-1 sm:max-w-[82%] sm:ml-5">
                 <CardShell variant="soft">
                   <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-gray-400">
-                    Track &amp; submit
+                    Prepare Documents &amp; SOP
+                  </p>
+                  <ul className="mt-4 divide-y divide-gray-100">
+                    <li className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 text-sm text-gray-700">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white">
+                        <Check className="h-3 w-3" />
+                      </span>
+                      <span className="truncate">CV / Resume</span>
+                      <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Uploaded
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 text-sm text-gray-700">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white">
+                        <Check className="h-3 w-3" />
+                      </span>
+                      <span className="truncate">Transcript</span>
+                      <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Uploaded
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 text-sm text-gray-700">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white">
+                        <Sparkles className="h-3 w-3" />
+                      </span>
+                      <span className="truncate">Statement of Purpose</span>
+                      <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Drafted
+                      </span>
+                    </li>
+                  </ul>
+                  <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">
+                    <span>Readiness</span>
+                    <span className="text-gray-600">3 of 3 ready</span>
+                  </div>
+                </CardShell>
+              </div>
+            </div>
+
+            {/* 04 · Track & Submit Application */}
+            <div
+              className="rise-in relative flex items-start gap-5 sm:gap-7"
+              style={{ animationDelay: "620ms" }}
+            >
+              <Stamp index="04" state="destination" />
+              <div className="min-w-0 flex-1">
+                <CardShell>
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-gray-400">
+                    Track &amp; Submit Application
                   </p>
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-800">
-                        <FileText className="h-4 w-4" />
+                        <ClipboardList className="h-4 w-4" />
                       </span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-gray-800">
-                          MSc Public Policy
+                          Every application, one tracker
                         </p>
                         <p className="truncate text-[11px] text-gray-400">
-                          LMU Munich
+                          Status · documents · deadlines
                         </p>
                       </div>
                     </div>
@@ -296,10 +351,10 @@ export default function LandingPage() {
                   <div className="mt-4 border-t border-gray-100 pt-3">
                     <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">
                       <span>Progress</span>
-                      <span className="text-gray-600">3 of 4</span>
+                      <span className="text-gray-600">Ready to submit</span>
                     </div>
                     <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-gray-100">
-                      <div className="h-full w-[75%] rounded-full bg-gray-900" />
+                      <div className="h-full w-full rounded-full bg-gray-900" />
                     </div>
                   </div>
                 </CardShell>

@@ -29,8 +29,6 @@ interface SOPInput {
   program: string;
   wordLimit: number | null;
   requirements: string;
-  prompt: string;
-  additionalInfo: string;
   mode: "generate" | "improve";
   currentContent: string;
   suggestions: string[];
@@ -86,8 +84,6 @@ function studentFactsText(input: SOPInput): string {
         `English proficiency: ${p.ieltsStatus}${p.ieltsBand ? ` · Band ${p.ieltsBand}` : ""}`,
       );
   }
-  if (input.additionalInfo)
-    parts.push(`Additional context from the student: ${input.additionalInfo}`);
 
   return parts.length
     ? parts.join("\n")
@@ -118,7 +114,7 @@ OFFICIAL SOP REQUIREMENTS (pasted verbatim by the student from the university's 
 ${input.requirements || "None provided. Write a strong, standard SOP structure."}
 
 STUDENT INSTRUCTIONS:
-${input.prompt || "Write a compelling, personalized SOP for this program."}
+Write a compelling, personalized statement focused on the student facts below.
 
 STUDENT FACTS (the ONLY facts about the student that may be used — absolutely do not invent anything else):
 ${studentFactsText(input)}
@@ -263,8 +259,6 @@ export async function POST(request: Request) {
       program,
       wordLimit,
       requirements: String(body.requirements ?? "").trim(),
-      prompt: String(body.prompt ?? "").trim(),
-      additionalInfo: String(body.additionalInfo ?? "").trim(),
       mode: body.mode === "improve" ? "improve" : "generate",
       currentContent: String(body.currentContent ?? "").trim(),
       suggestions: Array.isArray(body.suggestions)

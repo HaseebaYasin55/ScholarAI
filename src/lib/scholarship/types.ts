@@ -26,6 +26,10 @@ export interface ScholarshipRow {
   official_university_url: string | null;
   source_url: string | null;
   last_updated: string | null;
+  /** Set when the discovery pipeline's official-source verification passed. */
+  source_verified_at: string | null;
+  /** current open/upcoming/closed/expired state, from the official page. */
+  current_status: string | null;
   created_at: string | null;
   description: string | null;
   application_info: string | null;
@@ -53,10 +57,16 @@ export interface Scholarship {
   ieltsRequirement: string | null;
   openingDate: string | null;
   deadline: string | null;
+  /** Application cycle/year this deadline & status refer to (e.g. "2026/27"). */
+  cycle: string | null;
   officialScholarshipUrl: string | null;
   officialUniversityUrl: string | null;
   sourceUrl: string | null;
   lastUpdated: string | null;
+  /** True when the source passed official-source verification in the pipeline. */
+  officialSourceVerified: boolean | null;
+  /** current open/upcoming/closed/expired state, from the official page. */
+  currentStatus: string | null;
   description: string | null;
   applicationInfo: string | null;
 }
@@ -83,10 +93,13 @@ export function toScholarship(row: ScholarshipRow): Scholarship {
     ieltsRequirement: row.ielts_requirement,
     openingDate: row.opening_date,
     deadline: row.deadline,
+    cycle: null,
     officialScholarshipUrl: row.official_scholarship_url,
     officialUniversityUrl: row.official_university_url,
     sourceUrl: row.source_url,
     lastUpdated: row.last_updated,
+    officialSourceVerified: row.source_verified_at != null,
+    currentStatus: row.current_status ?? null,
     description: row.description ?? null,
     applicationInfo: row.application_info ?? null,
   };
@@ -105,6 +118,8 @@ export interface ScholarshipFilter {
   deadlineBefore?: string | null;
   openingBefore?: string | null;
   nameContains?: string | null;
+  /** Only rows whose source passed official-source verification. */
+  verifiedOnly?: boolean;
 }
 
 // ─── Data layer ──────────────────────────────────────────────────────────────
@@ -148,6 +163,7 @@ function applyFilter(
   if (f.deadlineAfter) q = q.gte("deadline", f.deadlineAfter);
   if (f.deadlineBefore) q = q.lte("deadline", f.deadlineBefore);
   if (f.openingBefore) q = q.lte("opening_date", f.openingBefore);
+  if (f.verifiedOnly) q = q.not("source_verified_at", "is", null);
 
   return q;
 }

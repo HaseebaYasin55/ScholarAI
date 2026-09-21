@@ -1,21 +1,22 @@
 // ─── Scholarship discovery orchestrator (server-side) ────────────────────────
-// Flow:
-//   user query → web search (primary + official-flavored) → fetch pages →
-//   LLM discovery (concrete, NAMED scholarships only) → resolve each name to
-//   its OFFICIAL source (university / government / funder) → re-fetch & extract
-//   current data from the official page → reject expired & aggregator results →
-//   deduplicate → soft-filter → cache (30 min).
+// Fast, mostly-deterministic pipeline:
+//   user query → intent (heuristic, NO LLM) → 3-4 diverse web searches run in
+//   parallel → aggregate + OFFICIAL-domain-preference prune (aggregators/news/
+//   blogs/seo hard-blocked) → fetch ~10 candidate pages in parallel (bounded
+//   concurrency, per-request timeout) → cheap local scholarship-signal filter →
+//   pick ≤8 official pages → ONE bounded Groq batch extraction (targeted page
+//   sections: deadline/funding/eligibility regions) → status/deadline from the
+//   official page → status-priority assembly → cache (30 min).
 //
-// Listicles and aggregators are used for discovery only; they are never served
-// as a final result. If the discovery pass itself fails (e.g. LLM outage) we
-// degrade to a legacy single-pass enrichment so genuine pages still surface,
-// but the preferred path is official-sourced scholarships.
+//   SPEED: exactly one LLM call; every I/O step is parallel + time-boxed; a
+//   single broken domain can never stall the search. Verification is the strict
+//   deterministic official gate (not-blocked + institutional domain + on-page
+//   scholarship signal) — we only surface official sources, never aggregators/
+//   blogs/news/third-party listings, and never invent names/deadlines/URLs.
 
 import type { Scholarship } from "./types";
-import type { SearchMeta, ScholarshipSearchResponse } from "./api-types";
+import type { IntentInfo, SearchMeta, ScholarshipSearchResponse } from "./api-types";
 import {
-  buildSearchQuery,
-  buildOfficialSearchQuery,
   searchWeb,
   type SearchFilters,
   type WebResult,
@@ -23,15 +24,13 @@ import {
 import {
   fetchPageText,
   domainTrust,
-  isAggregatorUrl,
-  isJunkUrl,
+  isBlockedSourceUrl,
+  isGenericName,
   type FetchedPage,
 } from "./web";
-import {
-  extractScholarshipsBatch,
-  discoverNamedScholarships,
-  type NamedScholarship,
-} from "./extract";
+import { extractScholarshipsBatch } from "./extract";
+import { fallbackIntent, fieldMatches, buildSearchQueries, type SearchIntent } from "./intent";
+import { scholarshipStatus, type ScholarshipStatusId } from "./scholarship-status";
 import { cacheKey, getCached, setCached, persistResults } from "./cache";
 
 export interface SearchParams {
@@ -41,23 +40,51 @@ export interface SearchParams {
   refresh?: boolean;
 }
 
-const DISCOVER_FETCH = 12;
-const EXTRACT_BATCH = 6;
-const MAX_VERIFY = 6;
-const VERIFY_CONCURRENCY = 3;
+// Budgets. Deliberately small: candidates are pruned hard BEFORE any expensive
+// work so the whole search stays snappy. 10 → 8 max.
+const MAX_WEB_QUERIES = 4;
+const DISCOVER_FETCH = 10;
+const FETCH_CONCURRENCY = 5;
+const FETCH_TIMEOUT_MS = 7_000;
+const MAX_EXTRACT_PAGES = 8;
+const EXTRACT_BATCH = 8;
 const MAX_ERRORS_REPORTED = 5;
 
 const norm = (v: string | null | undefined) =>
   (v ?? "").trim().toLowerCase();
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+/** Canonical form for URL-based dedupe (drop tracking params, trailing slash). */
+function canonicalUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    for (const p of [...u.searchParams.keys()]) {
+      if (p.startsWith("utm_") || p === "ref" || p === "source") {
+        u.searchParams.delete(p);
+      }
+    }
+    u.pathname = u.pathname.replace(/\/{2,}/g, "/").replace(/\/+$/, "") || "/";
+    return u.href.toLowerCase();
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+// A URL resolution that was rejected by the official-source gate (blocked
+// source, no institutional signal) — reported for transparency only.
+interface RejectedSource {
+  host: string;
+  url: string;
+}
 
 // ─── Concurrency helper ──────────────────────────────────────────────────────
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function mapConcurrent<T, R>(
   items: T[],
   concurrency: number,
-  fn: (item: T) => Promise<R | null | undefined>,
+  fn: (item: T, index: number) => Promise<R | null | undefined>,
 ): Promise<R[]> {
   const results: Array<R | null | undefined> = new Array(items.length);
   let cursor = 0;
@@ -68,7 +95,7 @@ async function mapConcurrent<T, R>(
         const i = cursor++;
         if (i >= items.length) return;
         try {
-          results[i] = await fn(items[i]);
+          results[i] = await fn(items[i], i);
         } catch (err) {
           console.error(`[search] worker error at ${i}:`, err);
           results[i] = undefined;
@@ -93,42 +120,141 @@ function queryTokens(webQuery: string): string[] {
   ];
 }
 
-function rankCandidate(r: WebResult, webQuery: string): number {
-  const trust = domainTrust(r.url);
+// ─── Discovery ranking + prune (cheap, before any fetch) ─────────────────────
+
+/** Relevance of a SERP entry to the intent (tokens in title/snippet + rank). */
+function serpRelevance(r: WebResult, webQuery: string): number {
   const tokens = queryTokens(webQuery);
   const haystack = `${r.title} ${r.snippet}`.toLowerCase();
-
   let hits = 0;
   for (const t of tokens) {
     if (haystack.includes(t)) hits++;
   }
-
-  const earlyBonus = r.rank < 4 ? 4 : r.rank < 9 ? 2 : 0;
-  return trust * 10 + hits * 3 + earlyBonus;
+  const earlyBonus = r.rank < 4 ? 2.5 : r.rank < 9 ? 1.25 : 0;
+  const phraseBonus = haystack.includes(webQuery.toLowerCase()) ? 3 : 0;
+  return hits * 2 + phraseBonus + earlyBonus + (r.hits && r.hits > 1 ? 2 : 0);
 }
 
-// ─── Official-source resolution ──────────────────────────────────────────────
+/**
+ * From aggregated SERP results pick a SMALL set of high-quality candidates to
+ * fetch. Blocked sources (aggregators/news/blogs/SEO) are hard-excluded first
+ * — they can never consume the fetch/LLM budget. Institutional domains
+ * (university, government and trusted programme organisations) are preferred.
+ */
+function pruneDiscoveryResults(
+  results: WebResult[],
+  webQuery: string,
+  budget: number,
+): { toFetch: WebResult[]; rejected: RejectedSource[] } {
+  const rejected: RejectedSource[] = [];
+  const official: Array<{ r: WebResult; score: number }> = [];
+  const other: Array<{ r: WebResult; score: number }> = [];
 
-/** Pick the most official, non-aggregator result from a search. */
-function pickOfficialResult(results: WebResult[]): WebResult | null {
-  const candidates = results.filter(
-    (r) => !isJunkUrl(r.url) && !isAggregatorUrl(r.url),
-  );
-  if (candidates.length === 0) return null;
-  candidates.sort(
-    (a, b) => domainTrust(b.url) - domainTrust(a.url) || a.rank - b.rank,
-  );
-  const best = candidates[0];
-  // Only an authoritative-looking source is acceptable as the official page
-  // for a named scholarship. Aggregator-ish pages are rejected, not tolerated.
-  if (domainTrust(best.url) < 2) return null;
-  return best;
+  for (const r of results) {
+    if (isBlockedSourceUrl(r.url)) {
+      rejected.push({ host: getHost(r.url), url: r.url });
+      continue;
+    }
+    const trust = domainTrust(r.url);
+    const score = serpRelevance(r, webQuery) + trust * 4;
+    if (trust >= 2) official.push({ r, score });
+    else other.push({ r, score: serpRelevance(r, webQuery) });
+  }
+
+  official.sort((a, b) => b.score - a.score);
+  other.sort((a, b) => b.score - a.score);
+
+  // Official domains only whenever there are enough; otherwise pad with the
+  // most relevant non-blocked pages (keep a hard cap so budget is preserved).
+  const take = budget + 2;
+  const officialTake = official.slice(0, Math.max(6, Math.ceil(budget * 0.7)));
+  const chosen = [...officialTake];
+  if (chosen.length < budget) {
+    for (const o of other) {
+      if (chosen.length >= take) break;
+      if (chosen.some((c) => c.r.url === o.r.url)) continue;
+      chosen.push(o);
+    }
+  }
+  return {
+    toFetch: chosen.slice(0, budget).map((x) => x.r),
+    rejected,
+  };
+}
+
+const getHost = (url: string): string => {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+};
+
+// ─── Candidate building + on-page signal filter (cheap, no LLM) ─────────────
+// Candidates ARE the official pages themselves — we only fetch official-domain
+// pages, so fetching a page == discovering a scholarship page. A local keyword
+// filter drops pages with no scholarship/funding/application signal before any
+// model call.
+
+const SCHOLARSHIP_SIGNAL = /\b(scholarship|bursar|grant|fellowship|financial aid|funding|stipend|award|how to apply|application)\b/i;
+
+/** 0-3 richness of scholarship signal on a page; 0 → discard. */
+function pageSignalScore(page: FetchedPage): number {
+  const text = (page.title ?? "") + " " + page.text.slice(0, 6_000);
+  const matches = text.match(SCHOLARSHIP_SIGNAL);
+  if (!matches) return 0;
+  const low = text.toLowerCase();
+  let score = 0;
+  if (/\b(scholarship|bursary|bursaries)\b/i.test(page.title ?? "")) score += 2;
+  if (/\b(funding|stipend|financial aid|fellowship|grant)\b/i.test(low)) score += 1;
+  if (/\b(deadline|application deadline|closing date|apply by)\b/i.test(low)) score += 1;
+  return matches ? Math.min(3, score + 1) : 0;
+}
+
+function candidateName(page: FetchedPage): string | null {
+  let t = (page.title ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  t = t
+    .replace(/\s*[|–—:]\s*(www\.)?[a-z0-9.-]+\.[a-z]{2,}\s*$/i, "")
+    .replace(/\s*\|[^|]*$/i, "")
+    .replace(/\s+\[(?:updated?|20\d{2})\]\s*$/i, "")
+    .trim();
+  if (!t || isGenericName(t)) return null;
+  const low = t.toLowerCase();
+  if (/^(top|best|the (top|best)|list( of)?|\d{1,2} )/i.test(low)) return null; // listicle
+  return t.slice(0, 140);
+}
+
+/**
+ * Rejects pages that LOOK like scholarship pages but are site furniture
+ * (home/index/database-listing pages), so they never surface as a scholarship.
+ */
+function pageIsIndexOrHome(page: FetchedPage): boolean {
+  const title = (page.title ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const url = page.url.toLowerCase();
+  if (title.startsWith("home") || title.startsWith("welcome to")) return true;
+  if (/\boverview\b/.test(title) && !/\bscholarship\b/.test(title)) return true;
+  if (/scholarship-?database/.test(url) && !/detail=/.test(url)) return true;
+  if (/scholarship\/?$/.test(url) && !/\bscholarship\b/.test(title)) return true;
+  const path = (() => {
+    try {
+      const { pathname } = new URL(page.url);
+      return pathname.replace(/\/+$/, "");
+    } catch {
+      return "";
+    }
+  })();
+  if (!path && !/\bscholarship\b/.test(title) && !/\bscholarships?\b/.test(page.text.slice(0, 1200))) return true;
+  return false;
 }
 
 // ─── Soft post-extraction filtering ─────────────────────────────────────────
 // We only EXCLUDE a result when an extracted value directly conflicts with a
 // requested filter. Unknown values pass through (ranked lower by the client's
-// match engine) rather than being discarded.
+// match engine) rather than being discarded. Field matching uses the SMART
+// related-programme vocabulary from intent (#5): a scholarship matches when one
+// of its ACTUAL eligible fields contains a wanted phrase — never mere token
+// overlap ("Engineering" ≠ "Computer Engineering" unless the field lists it).
 
 function listOverlaps(a: string[], b: string[]): boolean {
   const set = new Set(a.map((v) => norm(v)));
@@ -147,99 +273,99 @@ function fundingMatches(s: Scholarship, funding?: string | null): boolean {
   return true;
 }
 
-function appliesFilters(s: Scholarship, filters: SearchFilters = {}): boolean {
+function appliesFilters(
+  s: Scholarship,
+  filters: SearchFilters = {},
+  wantedFields?: string[],
+): boolean {
   if (filters.country && s.country && norm(s.country) !== norm(filters.country)) {
     return false;
   }
   if (filters.degreeLevels?.length && s.degreeLevels.length) {
     if (!listOverlaps(s.degreeLevels, filters.degreeLevels)) return false;
   }
-  if (filters.field && s.fields.length) {
-    if (!listOverlaps(s.fields, [filters.field])) return false;
+  if (wantedFields && wantedFields.length && s.fields.length) {
+    if (!fieldMatches(s.fields, wantedFields)) return false;
+  } else if (filters.field && s.fields.length) {
+    if (!fieldMatches(s.fields, [filters.field])) return false;
   }
   if (!fundingMatches(s, filters.funding)) return false;
   // scholarshipType is folded into the query + ranking (not an extracted field).
   return true;
 }
 
-// ─── Final assembly (expiry + aggregator rejection + dedupe + filter) ────────
+// ─── Final assembly (verified-official + status + dedupe + filter) ───────────
+// Hard, non-negotiable gates before a scholarship can be shown:
+//   1. its official URL must not be a blocked source (aggregator/news/blog/…)
+//   2. the source must have passed official-source verification
+//   3. current status: OPEN results always come first; then NOT OPEN YET and
+//      STATUS UNKNOWN; then DEADLINE PASSED / CLOSED. General searches still
+//      surface closed/upcoming results when they are genuinely relevant (they
+//      rank last so open alternatives win the top slots), but a named search
+//      keeps its programme even when closed — always clearly badged.
+//   4. duplicates (same programme name+org, or same official page) collapse.
+
+const STATUS_PRIORITY: Record<ScholarshipStatusId, number> = {
+  open: 0,
+  upcoming: 1,
+  unknown: 2,
+  deadlinePassed: 3,
+  closed: 4,
+};
+
+function recordQuality(s: Scholarship): number {
+  let q = 0;
+  if (s.currentStatus) q += 20;
+  if (s.deadline) q += 10;
+  if (s.openingDate) q += 5;
+  if (s.cycle) q += 3;
+  if (s.description) q += 2;
+  q += domainTrust(s.officialScholarshipUrl ?? "");
+  return q;
+}
 
 function assembleResults(
   extracted: Array<Scholarship | null>,
-  filters: SearchFilters,
-  limit: number,
+  opts: {
+    filters: SearchFilters;
+    wantedFields?: string[];
+    limit: number;
+  },
 ): Scholarship[] {
-  const today = todayISO();
+  const { filters, wantedFields, limit } = opts;
   const seenName = new Set<string>();
   const seenUrl = new Set<string>();
   const results: Scholarship[] = [];
 
-  for (const s of extracted) {
-    if (!s) continue;
-    // 1. Never serve an aggregator/listicle as a final result.
-    if (isAggregatorUrl(s.officialScholarshipUrl ?? "")) continue;
-    // 2. Never show an expired scholarship as active.
-    if (s.deadline && s.deadline < today) continue;
-    // 3. Deduplicate the same scholarship (by URL or normalized name).
-    const nameKey = s.name.toLowerCase().replace(/\s+/g, " ").trim();
-    const urlKey = s.sourceUrl ?? s.id;
+  // Open first, then upcoming/unknown, then closed/passed; within the same
+  // status prefer the richest, most authoritative source.
+  const ordered = extracted
+    .filter((s): s is Scholarship => s !== null)
+    .sort((a, b) => {
+      const pa = STATUS_PRIORITY[scholarshipStatus(a).id];
+      const pb = STATUS_PRIORITY[scholarshipStatus(b).id];
+      if (pa !== pb) return pa - pb;
+      return recordQuality(b) - recordQuality(a);
+    });
+
+  for (const s of ordered) {
+    // 1. Never serve a blocked source (aggregator/news/blog/third-party/SEO).
+    if (isBlockedSourceUrl(s.officialScholarshipUrl ?? "")) continue;
+    // 2. Only officially-verified sources may be shown. No unverified fallback.
+    if (!s.officialSourceVerified) continue;
+    // 3. Deduplicate the same scholarship (by official URL OR by programme
+    //    pronounced name + organization — one scholarship, one card).
+    const nameKey = `${norm(s.name)}|${norm(s.university ?? s.country ?? "")}`;
+    const urlKey = canonicalUrl(s.sourceUrl ?? s.officialScholarshipUrl ?? s.id);
     if (seenUrl.has(urlKey) || seenName.has(nameKey)) continue;
     seenUrl.add(urlKey);
     seenName.add(nameKey);
-    // 4. Soft filter.
-    if (!appliesFilters(s, filters)) continue;
+    // 4. Soft filter (country/degree/field/funding).
+    if (!appliesFilters(s, filters, wantedFields)) continue;
     results.push(s);
     if (results.length >= limit) break;
   }
   return results;
-}
-
-// ─── Legacy degradation path ─────────────────────────────────────────────────
-// Only used when LLM discovery finds nothing (e.g. transient Groq outage) or
-// official resolution returns zero results. Single-pass enrichment of the
-// discovery pages, with the same expiry check; aggregators are dropped when
-// enough real alternatives exist, otherwise kept so the user is never empty.
-
-async function runLegacyExtraction(
-  pages: FetchedPage[],
-  filters: SearchFilters,
-  limit: number,
-  context: { query: string },
-): Promise<Scholarship[]> {
-  const today = todayISO();
-  const extractedRaws: Array<Scholarship | null> = [];
-  for (let i = 0; i < pages.length; i += EXTRACT_BATCH) {
-    const chunk = pages.slice(i, i + EXTRACT_BATCH);
-    if (chunk.length === 0) break;
-    const chunkResults = await extractScholarshipsBatch(chunk, context);
-    extractedRaws.push(...chunkResults);
-    if (
-      extractedRaws.filter((x): x is Scholarship => x !== null).length >= limit * 2
-    ) {
-      break;
-    }
-  }
-
-  const strict = assembleResults(extractedRaws, filters, limit);
-  if (strict.length > 0) return strict;
-
-  // Lenient: keep non-expired results even if they come from aggregators.
-  const lenient: Scholarship[] = [];
-  const seenName = new Set<string>();
-  const seenUrl = new Set<string>();
-  for (const s of extractedRaws) {
-    if (!s) continue;
-    if (s.deadline && s.deadline < today) continue;
-    const nameKey = s.name.toLowerCase().replace(/\s+/g, " ").trim();
-    const urlKey = s.sourceUrl ?? s.id;
-    if (seenUrl.has(urlKey) || seenName.has(nameKey)) continue;
-    seenUrl.add(urlKey);
-    seenName.add(nameKey);
-    if (!appliesFilters(s, filters)) continue;
-    lenient.push(s);
-    if (lenient.length >= limit) break;
-  }
-  return lenient;
 }
 
 // ─── Public orchestrator ─────────────────────────────────────────────────────
@@ -272,39 +398,114 @@ export async function discoverScholarships(
     if (cached) return cached;
   }
 
-  const webQuery = buildSearchQuery(query, filters);
-  const officialQuery = buildOfficialSearchQuery(query, filters);
+  // ── Understand what the user MEANS (field? named programme? country/degree/
+  //     funding?). DETERMINISTIC — no LLM, instant; aliases (Fullbright →
+  //     Fulbright, Stipendium Hungary → Stipendium Hungaricum, …) handled fast.
+  const intent: SearchIntent = fallbackIntent(query, filters);
 
-  // ── 1. Discovery search: primary + official-flavored, deduplicated.
-  const [primary, official] = await Promise.allSettled([
-    searchWeb(webQuery),
-    searchWeb(officialQuery),
-  ]);
-  const webResults = [
-    ...(primary.status === "fulfilled" ? primary.value : []),
-    ...(official.status === "fulfilled" ? official.value : []),
-  ].filter((r, i, arr) => arr.findIndex((x) => x.url === r.url) === i);
+  const webQuery = intent.webQuery;
+  const queries = buildSearchQueries(intent, filters).slice(0, MAX_WEB_QUERIES);
+  const errors: string[] = [];
+
+  // ── 1. Discovery search: run the query set in PARALLEL. A single SERP is
+  //        never enough — 3-4 diverse queries run at once.
+  const queryResults = await mapConcurrent<
+    string,
+    { query: string; results: WebResult[]; error?: string }
+  >(
+    queries,
+    Math.min(3, queries.length),
+    async (q, idx = 0) => {
+      // Stagger launches by ~350ms so the burst is gentler on the search
+      // provider's rate limiter (still bounded: ≤ ~1s of added latency).
+      await sleep(idx * 350);
+      try {
+        return { query: q, results: await searchWeb(q) };
+      } catch (err) {
+        return {
+          query: q,
+          results: [],
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+  const anyTechnicalFailure =
+    queryResults.length > 0 && queryResults.every((r) => r.error);
+
+  // Aggregate across queries by canonical URL (best rank + hit count → the same
+  // page found by several queries collapses into ONE candidate).
+  const buckets = new Map<string, { r: WebResult; rank: number; hits: number }>();
+  for (const qr of queryResults) {
+    for (const r of qr.results) {
+      const key = canonicalUrl(r.url);
+      const got = buckets.get(key);
+      if (!got) buckets.set(key, { r, rank: r.rank, hits: 1 });
+      else {
+        got.rank = Math.min(got.rank, r.rank);
+        got.hits += 1;
+      }
+    }
+  }
+  const webResults: WebResult[] = [...buckets.values()].map((b) => ({
+    ...b.r,
+    rank: b.rank,
+    hits: b.hits,
+  }));
   const sourceCount = webResults.length;
+
   if (sourceCount === 0) {
-    throw new Error(
-      "Web search is temporarily unavailable (rate limited or blocked). Try again in a moment.",
-    );
+    if (anyTechnicalFailure) {
+      throw new Error(
+        "Web search is temporarily unavailable (rate limited or blocked). Try again in a moment.",
+      );
+    }
+    errors.push("No relevant web results were returned for these queries.");
+    return buildResponse({
+      query,
+      webQuery,
+      sourceCount,
+      fetched: 0,
+      extracted: 0,
+      errors,
+      results: [],
+      key,
+      intent,
+    });
   }
 
-  // ── 2. Rank + select candidates to fetch.
-  const ranked = webResults
-    .map((r) => ({ r, score: rankCandidate(r, webQuery) }))
-    .sort((a, b) => b.score - a.score)
-    .map((x) => x.r);
-  const toFetch = ranked.slice(0, Math.min(DISCOVER_FETCH, Math.max(limit * 3, 8)));
+  // ── 2. Prune to a few high-quality candidates BEFORE any fetch/LLM work:
+  //        blocked sources (aggregators/news/blogs/SEO) are hard-excluded and
+  //        institutional domains (.edu/.ac.*/.gov/trusted programmes) win.
+  const { toFetch, rejected } = pruneDiscoveryResults(
+    webResults,
+    webQuery,
+    DISCOVER_FETCH,
+  );
+  for (const rj of rejected) errors.push(`Skipped non-official source: ${rj.host}`);
+  if (toFetch.length === 0) {
+    errors.push("Nothing relevant was found on official sources.");
+    return buildResponse({
+      query,
+      webQuery,
+      sourceCount,
+      fetched: 0,
+      extracted: 0,
+      errors,
+      results: [],
+      key,
+      intent,
+    });
+  }
 
-  // ── 3. Fetch discovery pages (parallel, resilient).
+  // ── 3. Fetch candidate pages IN PARALLEL (bounded concurrency, per-request
+  //        timeout). Broken/unreachable pages are discarded quickly; the whole
+  //        step is as fast as the slowest surviving page, not the slowest one.
   const pages = await mapConcurrent<WebResult, FetchedPage>(
     toFetch,
-    4,
-    (candidate) => fetchPageText(candidate.url),
+    FETCH_CONCURRENCY,
+    (candidate) => fetchPageText(candidate.url, FETCH_TIMEOUT_MS),
   );
-  const errors: string[] = [];
   const fetchedSet = new Set(pages.map((p) => p.url));
   for (const candidate of toFetch) {
     if (!fetchedSet.has(candidate.url)) {
@@ -312,115 +513,91 @@ export async function discoverScholarships(
     }
   }
 
-  // ── 4. LLM discovery: concrete named scholarships only.
-  let candidates: NamedScholarship[] = [];
-  for (let i = 0; i < pages.length; i += EXTRACT_BATCH) {
-    const chunk = pages.slice(i, i + EXTRACT_BATCH);
-    if (chunk.length === 0) break;
-    const found = await discoverNamedScholarships(chunk, { query: webQuery });
-    candidates.push(...found.map((c) => ({ ...c, pageIndex: c.pageIndex + i })));
+  // ── 4. Cheap local filter → candidates (NO LLM yet). Only official-domain
+  //        pages with a real scholarship/funding/application signal survive;
+  //        official-first ordering keeps the extraction budget focused on the
+  //        strongest sources; dedupe by canonical URL; cap at the budget.
+  const crouching = [...pages].sort(
+    (a, b) => domainTrust(b.url) - domainTrust(a.url) || pageSignalScore(b) - pageSignalScore(a),
+  );
+  const candidates: FetchedPage[] = [];
+  const seenCandidate = new Set<string>();
+  for (const page of crouching) {
+    if (isBlockedSourceUrl(page.url)) continue;
+    if (domainTrust(page.url) < 2) continue;
+    if (pageSignalScore(page) === 0) continue;
+    if (pageIsIndexOrHome(page)) continue;
+    if (!candidateName(page)) continue;
+    const key = canonicalUrl(page.url);
+    if (seenCandidate.has(key)) continue;
+    seenCandidate.add(key);
+    candidates.push(page);
+    if (candidates.length >= MAX_EXTRACT_PAGES) break;
   }
-  candidates = candidates.slice(0, MAX_VERIFY * 2);
-
   if (candidates.length === 0) {
-    const results = await runLegacyExtraction(pages, filters, limit, {
-      query: webQuery,
-    });
+    errors.push("No official scholarship pages could be read fast enough; try again.");
     return buildResponse({
       query,
       webQuery,
       sourceCount,
       fetched: pages.length,
-      extracted: results.length,
+      extracted: 0,
       errors,
-      results,
+      results: [],
       key,
+      intent,
     });
   }
 
-  // ── 5. Resolve each candidate to its OFFICIAL source.
-  const resolutions: Array<{ candidate: NamedScholarship; officialUrl: string }> = [];
-  const resolvedUrls = new Set<string>();
-  for (const candidate of candidates) {
-    if (resolutions.length >= MAX_VERIFY) break;
-
-    let official = candidate.mentionedOfficialUrl;
-    if (!official) {
-      try {
-        const lookup = [
-          candidate.name,
-          candidate.organization,
-          "scholarship",
-        ]
-          .filter(Boolean)
-          .join(" ");
-        const found = pickOfficialResult(await searchWeb(lookup));
-        if (found) official = found.url;
-      } catch {
-        // search hiccup → candidate skipped below
-      }
-    }
-    if (!official) continue;
-    if (isAggregatorUrl(official)) continue; // reject aggregators as final source
-    if (resolvedUrls.has(official)) continue;
-    resolvedUrls.add(official);
-    resolutions.push({ candidate, officialUrl: official });
-  }
-
-  // ── 6. Fetch the official pages.
-  const verified = await mapConcurrent<
-    { candidate: NamedScholarship; officialUrl: string },
-    { candidate: NamedScholarship; page: FetchedPage }
-  >(
-    resolutions,
-    VERIFY_CONCURRENCY,
-    async ({ candidate, officialUrl }) => {
-      const page = await fetchPageText(officialUrl);
-      return { candidate, page };
-    },
+  // ── 5. ONE bounded Groq batch extraction over the verified official pages.
+  //        Targeted page sections (deadline/funding/eligibility regions) keep
+  //        the LLM input small; on Groq failure we fall back to deterministic
+  //        scraping of the SAME official pages. Either way the deadline/status
+  //        shown comes from the official source — never an invented value.
+  const extractedRaws = await extractScholarshipsBatch(
+    candidates.slice(0, EXTRACT_BATCH),
+    { query: webQuery },
+    { verified: true },
   );
-  const verifiedSet = new Set(verified.map((v) => v.candidate));
-  for (const r of resolutions) {
-    if (!verifiedSet.has(r.candidate)) {
-      errors.push(`Could not read ${new URL(r.officialUrl).hostname}`);
-    }
-  }
-  const verifiedPages = verified.map((v) => v.page);
 
-  // ── 7. Verification extraction: current data from the official source.
-  const extractedRaws: Array<Scholarship | null> = [];
-  for (let i = 0; i < verifiedPages.length; i += EXTRACT_BATCH) {
-    const chunk = verifiedPages.slice(i, i + EXTRACT_BATCH);
-    if (chunk.length === 0) break;
-    const chunkResults = await extractScholarshipsBatch(chunk, {
-      query: webQuery,
-    });
-    extractedRaws.push(...chunkResults);
-    if (
-      extractedRaws.filter((x): x is Scholarship => x !== null).length >= limit * 2
-    ) {
-      break;
-    }
-  }
+  // ── 6. Final assembly: official source required + status-priority ordering
+  //        (OPEN first, CLOSED/DEADLINE PASSED last) + dedupe + soft filters.
+  const results = assembleResults(extractedRaws, {
+    filters,
+    wantedFields: intent.mode === "general" ? intent.fields : undefined,
+    limit,
+  });
 
-  // ── 8. Final assembly: expiry + aggregator rejection + dedupe + soft filter.
-  const results = assembleResults(extractedRaws, filters, limit);
-
-  // No legacy fallback here: when a scholarship's official source can't be
-  // verified, serving an aggregator/listicle instead would violate the goal.
   return buildResponse({
     query,
     webQuery,
     sourceCount,
     fetched: pages.length,
     extracted: results.length,
+    verifiedOfficial: candidates.length,
+    rejected,
     errors,
     results,
     key,
+    intent,
   });
 }
 
 // ─── Response assembly + caching ─────────────────────────────────────────────
+
+/** Serialize the server intent into the client-safe contract shape. */
+function toIntentInfo(intent: SearchIntent): IntentInfo | null {
+  if (!intent) return null;
+  return {
+    mode: intent.mode,
+    namedScholarship: intent.namedScholarship,
+    displayField: intent.displayField,
+    relatedFields: intent.relatedFields.slice(0, 5),
+    country: intent.country,
+    degreeLevels: intent.degreeLevels.slice(0, 3),
+    funding: intent.funding,
+  };
+}
 
 function buildResponse(args: {
   query: string;
@@ -428,9 +605,12 @@ function buildResponse(args: {
   sourceCount: number;
   fetched: number;
   extracted: number;
+  verifiedOfficial?: number;
+  rejected?: RejectedSource[];
   errors: string[];
   results: Scholarship[];
   key: string;
+  intent: SearchIntent;
 }): ScholarshipSearchResponse {
   const response: ScholarshipSearchResponse = {
     results: args.results,
@@ -441,6 +621,9 @@ function buildResponse(args: {
       sourceCount: args.sourceCount,
       fetched: args.fetched,
       extracted: args.extracted,
+      verifiedOfficial: args.verifiedOfficial ?? 0,
+      rejected: args.rejected ?? [],
+      intent: toIntentInfo(args.intent),
       errors: args.errors.slice(0, MAX_ERRORS_REPORTED),
       fromCache: false,
     } satisfies SearchMeta,

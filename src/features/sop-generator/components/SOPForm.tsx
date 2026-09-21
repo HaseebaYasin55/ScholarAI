@@ -3,7 +3,6 @@ import Link from "next/link";
 import {
   GraduationCap,
   FileText,
-  MessageSquareText,
   UserRound,
   ArrowRight,
   Sparkles,
@@ -146,41 +145,6 @@ export default function SOPForm({
               onChange={(e) => patch("requirements", e.target.value)}
               className={`${inputClass} resize-none`}
               placeholder="e.g. Discuss your academic background, reasons for choosing this program, your career goals, and one challenge you have overcome..."
-            ></textarea>
-          </Field>
-        </div>
-      </section>
-
-      {/* Step 03 — Your prompt */}
-      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <StepHeader eyebrow="Step 03" title="Your instructions" icon={MessageSquareText} />
-        <div className="space-y-5 p-6">
-          <Field
-            label="What should the SOP focus on?"
-            hint="Describe what to emphasize. We combine this with your profile — no facts are invented."
-            id="prompt"
-          >
-            <textarea
-              id="prompt"
-              rows={4}
-              value={formData.prompt}
-              onChange={(e) => patch("prompt", e.target.value)}
-              className={`${inputClass} resize-none`}
-              placeholder='e.g. Generate a 750-word SOP for MSc AI. Focus on my Computer Engineering background, AI projects, and career goals.'
-            ></textarea>
-          </Field>
-          <Field
-            label="Extra context (optional)"
-            hint="Anything beyond your profile: specific projects, internships, publications, or reasons for this program."
-            id="additionalInfo"
-          >
-            <textarea
-              id="additionalInfo"
-              rows={3}
-              value={formData.additionalInfo}
-              onChange={(e) => patch("additionalInfo", e.target.value)}
-              className={`${inputClass} resize-none`}
-              placeholder="e.g. Led a fraud-detection model with 40% fewer false positives; interned at X as a Data Science intern."
             ></textarea>
           </Field>
         </div>

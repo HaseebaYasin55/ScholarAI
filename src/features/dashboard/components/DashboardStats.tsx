@@ -3,6 +3,7 @@
 import React from 'react';
 import { FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { isCompletedStatus } from '../../application-tracking/status';
 
 export default function DashboardStats() {
   const { applications, documents } = useAppStore();
@@ -15,12 +16,12 @@ export default function DashboardStats() {
     },
     {
       label: 'Completed',
-      value: applications.filter(a => a.status === 'Submitted').length,
+      value: applications.filter(a => isCompletedStatus(a.status)).length,
       icon: CheckCircle,
     },
     {
       label: 'In Progress',
-      value: applications.filter(a => a.status !== 'Submitted').length,
+      value: applications.filter(a => !isCompletedStatus(a.status)).length,
       icon: Clock,
     },
     {

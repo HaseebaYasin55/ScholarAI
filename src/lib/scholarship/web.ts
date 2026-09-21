@@ -70,10 +70,91 @@ const TRUSTED_ORGS = [
   "gatescambridge.org",
   "obama.org",
   "rhodeshouse.ox.ac.uk",
-  "scholars4dev.com",
   "secai.org",
   "dfg.de",
   "humboldt-foundation.de",
+  "stipendiumhungaricum.hu",
+  "tempuspublicfoundation.hu",
+  "study-in-hungary.hu",
+];
+
+// News / media websites that publish scholarship articles or "top scholarships"
+// round-ups. Never an authoritative official application source.
+const NEWS_HOSTS = [
+  "bbc.com",
+  "bbc.co.uk",
+  "cnn.com",
+  "theguardian.com",
+  "nytimes.com",
+  "washingtonpost.com",
+  "reuters.com",
+  "apnews.com",
+  "aljazeera.com",
+  "timeshighereducation.com",
+  "thepienews.com",
+  "universityworldnews.com",
+  "theconversation.com",
+  "forbes.com",
+  "businessinsider.com",
+  "fortune.com",
+  "bloomberg.com",
+  "economist.com",
+  "usnews.com",
+  "huffpost.com",
+  "independent.co.uk",
+  "telegraph.co.uk",
+  "thetimes.com",
+  "timesnownews.com",
+  "indiatimes.com",
+  "timesofindia.indiatimes.com",
+  "hindustantimes.com",
+  "thehindu.com",
+  "dailymail.co.uk",
+];
+
+// Blog platforms & personal-publishing hosts. Posts there are never the
+// authoritative official source for a scholarship.
+const BLOG_HOSTS = [
+  "blogspot.com",
+  "blogspot.co.uk",
+  "blogspot.in",
+  "wordpress.com",
+  "blogger.com",
+  "substack.com",
+  "typepad.com",
+  "livejournal.com",
+  "tumblr.com",
+  "medium.com",
+  "wixsite.com",
+  "squarespace.com",
+  "weebly.com",
+  "ghost.org",
+  "dev.to",
+  "github.io",
+  "hatenablog.com",
+];
+
+// Third-party study-abroad / listing / SEO scholarship sites that are sometimes
+// mistaken for official sources. Discovery-only; never surfaced to the user.
+const THIRD_PARTY_HOSTS = [
+  "findamasters.com",
+  "findaphd.com",
+  "scholarshippositions.com",
+  "scholarship-positions.com",
+  "scholarshipsfordevelopment.com",
+  "internationalscholarships.info",
+  "scholarships360.org",
+  "scholarshipjunkies.org",
+  "yocket.com",
+  "collegedunia.com",
+  "studyinternational.com",
+  "studying-in-germany.org",
+  "mastersportal.com",
+  "studyabroad.com",
+  "goabroad.com",
+  "topuniversities.com",
+  "prodigyfinance.com",
+  "gograd.org",
 ];
 
 // Domains that aggregate/curate scholarship listings or listicles. Useful for
@@ -108,6 +189,10 @@ const AGGREGATOR_HOSTS = [
   "globalscholarships.com",
   "scholarshipowl.com",
   "fastweb.com",
+  "scholarhunter.com",
+  "afterschoolafrica.com",
+  "scholarafrika.com",
+  "eduvision.edu.pk",
   "collegescholarships.org",
   "scholarshipy.com",
   "scholarshiptable.com",
@@ -130,11 +215,72 @@ export function getUrlHost(url: string): string {
   }
 }
 
+// Country for an official host's country-code TLD — a real property of the
+// source (never from third-party text). Shared by extraction + candidates.
+const TLD_TO_COUNTRY: Record<string, string> = {
+  de: "Germany",
+  uk: "United Kingdom",
+  au: "Australia",
+  ca: "Canada",
+  us: "United States",
+  jp: "Japan",
+  fr: "France",
+  nl: "Netherlands",
+  se: "Sweden",
+  fi: "Finland",
+  it: "Italy",
+  kr: "South Korea",
+  es: "Spain",
+  nz: "New Zealand",
+  in: "India",
+  my: "Malaysia",
+  sg: "Singapore",
+  cn: "China",
+  ie: "Ireland",
+  at: "Austria",
+  pl: "Poland",
+  no: "Norway",
+  dk: "Denmark",
+  ch: "Switzerland",
+  be: "Belgium",
+  hu: "Hungary",
+  tr: "Turkey",
+  cz: "Czech Republic",
+  ru: "Russia",
+  gr: "Greece",
+  pt: "Portugal",
+  il: "Israel",
+  ae: "United Arab Emirates",
+  th: "Thailand",
+  id: "Indonesia",
+  eg: "Egypt",
+  br: "Brazil",
+  mx: "Mexico",
+};
+
+/** Country inferred from a URL or bare hostname's TLD, or null. */
+export function hostCountry(urlOrHost: string): string | null {
+  const host = urlOrHost.includes("://") ? getUrlHost(urlOrHost) : urlOrHost;
+  try {
+    const parts = host.split(".").map((p) => p.trim().toLowerCase()).filter(Boolean);
+    if (parts.length < 2) return null;
+    return TLD_TO_COUNTRY[parts[parts.length - 1]] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function domainParts(host: string): string[] {
-  return host
+  const parts = host
     .split(".")
     .map((p) => p.trim())
     .filter(Boolean);
+  // The www label is not a registrable-domain part: it must not inflate
+  // "subdomain" counts that later translate into trust levels.
+  if (parts[0] === "www" || parts[0] === "w2" || parts[0] === "www2") {
+    parts.shift();
+  }
+  return parts;
 }
 
 export function isJunkUrl(url: string): boolean {
@@ -148,6 +294,58 @@ export function isAggregatorUrl(url: string): boolean {
   const host = getUrlHost(url);
   if (!host) return true;
   return AGGREGATOR_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+function hostIn(host: string, list: string[]): boolean {
+  return list.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+/** News / media article hosts (scholarship journalism, never the authority). */
+export function isNewsUrl(url: string): boolean {
+  const host = getUrlHost(url);
+  if (!host) return true;
+  if (hostIn(host, NEWS_HOSTS)) return true;
+  // A `news.`, `blog.` or `media.` label marks a section, not the authority.
+  const labels = host.split(".");
+  return labels.some((l) => l === "news" || l === "blog");
+}
+
+/** Blog platform hosts (personal publishing, never the authority). */
+export function isBlogUrl(url: string): boolean {
+  const host = getUrlHost(url);
+  if (!host) return true;
+  return hostIn(host, BLOG_HOSTS);
+}
+
+/**
+ * THE source gate for surfacing a URL to a user anywhere.
+ *
+ * True  → the URL may be displayed as a scholarship link.
+ * False → NEVER display this URL as a scholarship result / official link,
+ *         even if a discovery search mentions it. No fallback.
+ *
+ * Unverifiable hosts, social media, aggregators, news, blogs and third-party
+ * listing/SEO sites are all blocked. This is a hard, non-negotiable filter.
+ */
+export function isBlockedSourceUrl(url: string): boolean {
+  const host = getUrlHost(url);
+  if (!host) return true;
+  if (isJunkUrl(url)) return true;
+  if (hostIn(host, AGGREGATOR_HOSTS)) return true;
+  if (hostIn(host, THIRD_PARTY_HOSTS)) return true;
+  if (isNewsUrl(url)) return true;
+  if (isBlogUrl(url)) return true;
+  return false;
+}
+
+/**
+ * A URL that is *plausibly official* to a human eye: not blocked and carrying
+ * an educational/government/trusted-org signal. Used as a cheap pre-filter;
+ * final acceptance additionally requires LLM verification in the pipeline.
+ */
+export function isAcceptableOfficialUrl(url: string): boolean {
+  if (isBlockedSourceUrl(url)) return false;
+  return domainTrust(url) >= 2;
 }
 
 /** 0-3 trust score. Higher = more likely an official source. */

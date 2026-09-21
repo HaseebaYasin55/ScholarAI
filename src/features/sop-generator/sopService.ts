@@ -21,8 +21,6 @@ export interface SOPRequest {
   program: string;
   wordLimit: number | null;
   requirements: string;
-  prompt: string;
-  additionalInfo: string;
   profile: SOPProfileContext;
   mode: "generate" | "improve";
   currentContent?: string;
@@ -34,8 +32,6 @@ export interface SOPFormValues {
   program: string;
   wordLimit: string;
   requirements: string;
-  prompt: string;
-  additionalInfo: string;
 }
 
 export interface ProfileSummaryRow {
@@ -58,6 +54,8 @@ export interface SOPPrefillSource {
   university: string;
   program: string;
   requirements?: string;
+  /** Optional application the saved SOP should be linked to (journey step 5). */
+  application_id?: string | null;
 }
 
 export function countWords(text: string): number {

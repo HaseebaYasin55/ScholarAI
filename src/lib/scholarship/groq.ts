@@ -48,7 +48,9 @@ export async function groqJSON<T>(request: {
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  const MAX_RESET_WAIT_MS = 60_000;
+  // Tight budget: this pipeline makes at most ONE Groq call per search, so the
+  // worst case must stay short enough to feel fast even when throttled.
+  const MAX_RESET_WAIT_MS = 12_000;
 
   const parseRetrySeconds = (message: string): number | null => {
     const m = message.match(/retry (?:in|after)\s+([\d.]+)\s*s/i);
@@ -65,7 +67,7 @@ export async function groqJSON<T>(request: {
     let response: Response;
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 60_000);
+      const timer = setTimeout(() => controller.abort(), 30_000);
       try {
         response = await fetch(GROQ_ENDPOINT, {
           method: "POST",

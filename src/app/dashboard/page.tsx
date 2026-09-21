@@ -9,8 +9,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import DashboardStats from '@/features/dashboard/components/DashboardStats';
-import ApplicationTable from '@/features/application-tracking/ApplicationTable';
-import ReadinessProgress from '@/features/dashboard/components/ReadinessProgress';
+import ApplicationCards from '@/features/application-tracking/ApplicationCards';
 import RecommendationModules from '@/features/recommendations/RecommendationModules';
 import { useRequireOnboarding } from '@/hooks/useRequireOnboarding';
 
@@ -95,10 +94,9 @@ export default function DashboardPage() {
 
           {/* Feature blocks */}
           <RecommendationModules />
-          <ReadinessProgress />
           <DashboardStats />
 
-          <ApplicationTable />
+          <ApplicationCards />
 
           {/* Copilot strip */}
           <div className="mt-10 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

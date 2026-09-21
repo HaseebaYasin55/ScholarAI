@@ -10,6 +10,7 @@ import type { Scholarship } from "@/lib/scholarship/types";
 import type {
   ScholarshipSearchResponse,
   SearchMeta,
+  IntentInfo,
 } from "@/lib/scholarship/api-types";
 import ScholarshipCard from "@/components/scholarships/ScholarshipCard";
 import Header from "@/components/Header";
@@ -49,11 +50,30 @@ const SCHOLARSHIP_TYPES = [
 
 const SAMPLE_QUERIES = [
   "Computer Engineering scholarships",
-  "Fully funded scholarships in Germany",
+  "Fully funded Master's in Germany",
   "DAAD scholarships",
+  "Fulbright program in the USA",
   "University of Melbourne scholarships",
-  "Scholarships for Master's in AI",
+  "PhD scholarship in AI and robotics",
 ];
+
+/** A human-readable "what the search understood" line from the intent. */
+function interpretingLine(i: IntentInfo | null, query: string): string | null {
+  if (!i) return null;
+  if (i.mode === "name" && i.namedScholarship) {
+    return `Looking up "${i.namedScholarship}" from official sources.`;
+  }
+  if (i.mode !== "general") return null;
+  const parts: string[] = [];
+  if (i.displayField) parts.push(i.displayField);
+  if (i.country) parts.push(i.country);
+  if (i.degreeLevels.length) parts.push(i.degreeLevels.join(", "));
+  if (i.funding) parts.push(i.funding);
+  if (i.relatedFields.length) {
+    return `Focused on ${parts.join(" · ") || `"${query}"`} — also checking related fields: ${i.relatedFields.join(", ")}.`;
+  }
+  return parts.length ? `Interpreting "${query}" as: ${parts.join(" · ")}.` : null;
+}
 
 interface PrefsRow {
   degree_levels: string[];
@@ -117,6 +137,9 @@ const EMPTY_META: SearchMeta = {
   sourceCount: 0,
   fetched: 0,
   extracted: 0,
+  verifiedOfficial: 0,
+  rejected: [],
+  intent: null,
   errors: [],
   fromCache: false,
 };
@@ -448,14 +471,55 @@ export default function ScholarshipsPage() {
             </p>
           </div>
         ) : searchedWithNoResults ? (
-          /* Ran but nothing matched */
-          <div className="mx-auto mt-16 max-w-md text-center">
-            <p className="text-sm font-medium text-gray-900">
-              No scholarships found.
-            </p>
-            <p className="mt-2 text-[13px] leading-relaxed text-gray-400">
-              Try a simpler query or fewer filters.
-            </p>
+          /* Ran but nothing matched — smart, helpful empty state */
+          <div className="mx-auto mt-12 max-w-md text-center">
+            {meta?.intent?.mode === "name" && meta.intent.namedScholarship ? (
+              <>
+                <p className="text-sm font-medium text-gray-900">
+                  No verified scholarships found for &ldquo;{meta.intent.namedScholarship}&rdquo; right now.
+                </p>
+                <p className="mt-2 text-[13px] leading-relaxed text-gray-400">
+                  It may be late for the current cycle or applications may not
+                  be open yet. Try again when it opens, or browse a related
+                  programme below — every result is checked against its
+                  official source.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-gray-900">
+                  No verified scholarships found for this search right now.
+                </p>
+                {meta?.intent?.displayField ? (
+                  <p className="mt-1 text-[13px] text-gray-500">
+                    Searched broadly for {meta.intent.displayField} across
+                    official university, government and organization sources.
+                  </p>
+                ) : null}
+                {meta?.intent?.relatedFields?.length ? (
+                  <>
+                    <p className="mt-2 text-[13px] leading-relaxed text-gray-400">
+                      Try a broader related field:
+                    </p>
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                      {meta.intent.relatedFields.map((rf) => (
+                        <button
+                          key={rf}
+                          onClick={() => fillAndSearch({ query: rf, field: "" })}
+                          className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 transition-colors hover:border-gray-900 hover:text-gray-900"
+                        >
+                          {rf}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-2 text-[13px] leading-relaxed text-gray-400">
+                    Try a simpler query or fewer filters.
+                  </p>
+                )}
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -471,7 +535,9 @@ export default function ScholarshipsPage() {
                     {meta.sourceCount} source
                     {meta.sourceCount === 1 ? "" : "s"}
                     {meta.fetched > 0 ? ` · ${meta.fetched} read` : ""}
-                    {meta.extracted > 0 ? ` · ${meta.extracted} structured` : ""}
+                    {meta.verifiedOfficial > 0
+                      ? ` · ${meta.verifiedOfficial} official verified`
+                      : ""}
                     {meta.errors.length > 0
                       ? ` · ${meta.errors.length} skipped`
                       : ""}
@@ -488,6 +554,12 @@ export default function ScholarshipsPage() {
                 </button>
               </div>
             </div>
+
+            {meta?.intent ? (
+              <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
+                {interpretingLine(meta.intent, meta.query)}
+              </p>
+            ) : null}
 
             <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {matched.map((m) => (

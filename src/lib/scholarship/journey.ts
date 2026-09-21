@@ -97,7 +97,11 @@ function hasSubmittedDoc(
   return { present: doc.status === "Submitted" && Boolean(doc.file_path), doc };
 }
 
-function hasMatchingSop(sops: SOP[], scholarship: Scholarship, program?: string): boolean {
+export function hasMatchingSop(
+  sops: SOP[],
+  scholarship: Pick<Scholarship, "university">,
+  program?: string,
+): boolean {
   const uni = (scholarship.university ?? "").trim().toLowerCase();
   const prog = (program ?? "").trim().toLowerCase();
   return sops.some((s) => {

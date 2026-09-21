@@ -17,14 +17,44 @@ function storageFileName(file: File): string {
   return `${stem}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
 }
 
+export const APPLICATION_STATUSES = [
+  "Interested",
+  "Preparing",
+  "Applied",
+  "Under Review",
+  "Interview",
+  "Accepted",
+  "Rejected",
+  "Draft",
+  "In Review",
+  "Submitted",
+  "Action Required",
+] as const;
+
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
 export interface Application {
   id: string;
+  user_id?: string;
   university: string;
   program: string;
-  status: 'Draft' | 'In Review' | 'Submitted' | 'Action Required';
+  status: ApplicationStatus;
   progress: number;
-  deadline: string;
+  deadline: string | null;
   last_updated?: string;
+  // Snapshot of the scholarship chosen with "I want to apply".
+  scholarship_id?: string | null;
+  organization?: string | null;
+  country?: string | null;
+  official_url?: string | null;
+  degree_levels?: string[];
+  fields?: string[];
+  required_documents?: string[];
+  description?: string | null;
+  application_info?: string | null;
+  opening_date?: string | null;
+  // Application preparation journey state (migration 014).
+  requirements_reviewed?: boolean;
 }
 
 export interface Document {
@@ -123,6 +153,26 @@ interface AppState {
   deleteClaim: (id: string) => Promise<void>;
 }
 
+// Keeps `applications` an ordered list without state-level duplicates when the
+// same row returns through different paths (fresh insert vs. duplicate fetch).
+function prependUniqueApplication(
+  list: Application[],
+  app: Application,
+): Application[] {
+  return list.some((x) => x.id === app.id) ? list : [app, ...list];
+}
+
+// The DB enforces one application per (user, scholarship) via the partial
+// unique index `applications_user_scholarship_unique`. Surfacing that as an
+// error would be wrong UX — "already tracked" is a success, not a failure.
+function isAlreadyTrackedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: unknown; message?: unknown; details?: unknown };
+  if (e.code !== "23505") return false;
+  const haystack = [e.message, e.details].filter(Boolean).join(" ");
+  return haystack.includes("applications_user_scholarship_unique");
+}
+
 export const useAppStore = create<AppState>((set) => ({
   applications: [],
   documents: [],
@@ -167,27 +217,70 @@ export const useAppStore = create<AppState>((set) => ({
 
   addApplication: async (app) => {
     const user = useAuthStore.getState().user;
-    if (!user) return;
+    if (!user) {
+      throw new Error("You must be signed in to track scholarships.");
+    }
+
+    // The `deadline` column is a DATE — an empty string would fail the cast
+    // (SQLSTATE 22P02), so a missing deadline is stored as NULL (same pattern
+    // as addDocument below).
+    const payload = {
+      ...app,
+      user_id: user.id,
+      deadline: app.deadline || null,
+    };
 
     const { data, error } = await supabase
       .from('applications')
-      .insert([{ ...app, user_id: user.id }])
+      .insert([payload])
       .select()
       .single();
 
-    if (error) throw error;
-    set((state) => ({ applications: [data, ...state.applications] }));
+    if (error) {
+      // Already tracked: the in-memory guard can miss it (store not loaded
+      // yet, rapid double-click), but the DB unique index cannot. Fetch and
+      // show the existing application instead of failing the user.
+      if (isAlreadyTrackedError(error)) {
+        const existing = await supabase
+          .from('applications')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('scholarship_id', payload.scholarship_id ?? '')
+          .maybeSingle();
+        if (existing.error) throw existing.error;
+        if (existing.data) {
+          set((state) => ({
+            applications: prependUniqueApplication(state.applications, existing.data),
+          }));
+          return;
+        }
+      }
+      // Surfaces the real Supabase error (PostgREST/Postgres) to the caller —
+      // thrown as-is so the UI never shows a generic, misleading message.
+      throw error;
+    }
+
+    set((state) => ({
+      applications: prependUniqueApplication(state.applications, data),
+    }));
   },
 
   updateApplication: async (id, updates) => {
+    // Same DATE cast guard as addApplication: an empty deadline string is
+    // stored as NULL rather than rejected by Postgres.
+    const { deadline, ...rest } = updates;
+    const sanitized: Partial<Application> = {
+      ...rest,
+      ...(deadline !== undefined ? { deadline: deadline || null } : {}),
+    };
     const { error } = await supabase
       .from('applications')
-      .update(updates)
+      .update(sanitized)
       .eq('id', id);
 
     if (error) throw error;
     set((state) => ({
-      applications: state.applications.map(app => app.id === id ? { ...app, ...updates } : app)
+      applications: state.applications.map(app => app.id === id ? { ...app, ...sanitized } : app)
     }));
   },
 
