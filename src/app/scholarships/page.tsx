@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, RefreshCw } from "lucide-react";
+import {
+  ChevronDown,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase-browser";
 import { useRequireOnboarding } from "@/hooks/useRequireOnboarding";
 import { matchScholarships } from "@/lib/scholarship/match";
@@ -54,7 +61,6 @@ const SAMPLE_QUERIES = [
   "DAAD scholarships",
   "Fulbright program in the USA",
   "University of Melbourne scholarships",
-  "PhD scholarship in AI and robotics",
 ];
 
 /** A human-readable "what the search understood" line from the intent. */
@@ -145,6 +151,39 @@ const EMPTY_META: SearchMeta = {
   fromCache: false,
 };
 
+type FilterKey = "country" | "degree" | "field" | "funding" | "type";
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-gray-400">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none transition-colors focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export default function ScholarshipsPage() {
   const { user } = useRequireOnboarding();
   const setResults = useScholarshipResultsStore((s) => s.setResults);
@@ -162,6 +201,7 @@ export default function ScholarshipsPage() {
   const [meta, setMeta] = useState<SearchMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Load preferences (used only for ranking/clarifying matches, never as a
   // default search query).
@@ -300,108 +340,77 @@ export default function ScholarshipsPage() {
   const searchedWithNoResults =
     !loading && !error && matched.length === 0 && meta !== null;
 
+  // Selected filters as removable chips (labels, not raw codes).
+  const fundingLabel =
+    FUNDING_TYPES.find((f) => f.value === funding)?.label ?? funding;
+  const typeLabel =
+    SCHOLARSHIP_TYPES.find((t) => t.value === scholarshipType)?.label ??
+    scholarshipType;
+  const selectedFilters = [
+    { key: "country" as FilterKey, value: country },
+    { key: "degree" as FilterKey, value: degree },
+    { key: "field" as FilterKey, value: field },
+    { key: "funding" as FilterKey, value: fundingLabel },
+    { key: "type" as FilterKey, value: typeLabel },
+  ].filter((f) => f.value !== "");
+  const activeCount = selectedFilters.length;
+
+  const clearFilter = (key: FilterKey) => {
+    if (key === "country") setCountry("");
+    else if (key === "degree") setDegree("");
+    else if (key === "field") setField("");
+    else if (key === "funding") setFunding("");
+    else if (key === "type") setScholarshipType("");
+  };
+
+  const clearAllFilters = () => {
+    setCountry("");
+    setDegree("");
+    setField("");
+    setFunding("");
+    setScholarshipType("");
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <main className="mx-auto max-w-6xl px-6 py-10 sm:py-14">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         {/* Header */}
-        <div className="mb-8 sm:mb-10">
+        <div className="mb-8 max-w-2xl sm:mb-10">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
             Discover scholarships
           </h1>
-          <p className="mt-2 max-w-lg text-sm leading-relaxed text-gray-500">
-            Find real scholarships from official sources across the web.
+          <p className="mt-2 text-sm text-gray-500">
+            Find real scholarships from official sources.
           </p>
         </div>
 
-        {/* Search */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
-                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={query}
-                  autoFocus
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submit();
-                  }}
-                  placeholder="Search by field, scholarship name, university, or country..."
-                  className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-3 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
-                />
-              </div>
+        {/* Search panel */}
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_14px_30px_-26px_rgba(0,0,0,0.3)] sm:p-6">
+          {/* Search row */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                value={query}
+                autoFocus
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submit();
+                }}
+                placeholder="Search by field, scholarship name, university, or country..."
+                className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-3 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
+              />
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <button
                 onClick={submit}
                 disabled={loading || !hasCriteria}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_18px_-12px_rgba(0,0,0,0.5)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-gray-800 hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_14px_24px_-12px_rgba(0,0,0,0.45)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
                 {loading && <RefreshCw className="h-4 w-4 animate-spin" />}
                 {loading ? "Searching" : "Search"}
               </button>
-            </div>
-
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-700 outline-none transition-colors focus:border-gray-900"
-              >
-                <option value="">Any country</option>
-                {DESTINATIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={degree}
-                onChange={(e) => setDegree(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-700 outline-none transition-colors focus:border-gray-900"
-              >
-                <option value="">Any degree</option>
-                {DEGREES.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={field}
-                onChange={(e) => setField(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-700 outline-none transition-colors focus:border-gray-900"
-              >
-                <option value="">Any field</option>
-                {FIELDS.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={funding}
-                onChange={(e) => setFunding(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-700 outline-none transition-colors focus:border-gray-900"
-              >
-                {FUNDING_TYPES.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={scholarshipType}
-                onChange={(e) => setScholarshipType(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-700 outline-none transition-colors focus:border-gray-900"
-              >
-                {SCHOLARSHIP_TYPES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-
               <button
                 onClick={() =>
                   fillAndSearch({
@@ -418,32 +427,137 @@ export default function ScholarshipsPage() {
                   })
                 }
                 disabled={loading}
-                className="ml-auto inline-flex items-center gap-1.5 px-2 py-2 text-[13px] font-medium text-gray-400 transition-colors hover:text-gray-900 disabled:opacity-40"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
               >
+                <Sparkles className="h-4 w-4" />
                 Use my profile
               </button>
             </div>
-
-            {/* Suggestions */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] text-gray-400">Try:</span>
-              {SAMPLE_QUERIES.map((sq) => (
-                <button
-                  key={sq}
-                  onClick={() => fillAndSearch({ query: sq })}
-                  disabled={loading}
-                  className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600 transition-colors hover:border-gray-900 hover:text-gray-900 disabled:opacity-40"
-                >
-                  {sq}
-                </button>
-              ))}
-            </div>
           </div>
-        </div>
+
+          {/* Filters toggle + selected chips */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-expanded={filtersOpen}
+              className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[13px] font-semibold transition-all duration-150 ${
+                filtersOpen
+                  ? "border-gray-900 bg-gray-900 text-white shadow-[0_1px_2px_rgba(0,0,0,0.3),0_8px_16px_-12px_rgba(0,0,0,0.5)]"
+                  : "border-gray-300 bg-white text-gray-700 hover:-translate-y-0.5 hover:border-gray-900 hover:text-gray-900"
+              }`}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters
+              {activeCount > 0 && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                    filtersOpen
+                      ? "bg-white text-gray-900"
+                      : "bg-gray-900 text-white"
+                  }`}
+                >
+                  {activeCount}
+                </span>
+              )}
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {selectedFilters.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => clearFilter(f.key)}
+                title={`Remove ${f.value}`}
+                className="group inline-flex items-center gap-1.5 rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-gray-800"
+              >
+                <span className="max-w-[10rem] truncate">{f.value}</span>
+                <X className="h-3 w-3 opacity-70 transition-opacity group-hover:opacity-100" />
+              </button>
+            ))}
+          </div>
+
+          {/* Filters drawer */}
+          {filtersOpen && (
+            <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/70 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Filter scholarships
+                </p>
+                {activeCount > 0 && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="inline-flex items-center gap-1 text-[12px] font-semibold text-gray-500 underline decoration-gray-300 underline-offset-2 transition-colors hover:text-gray-900 hover:decoration-gray-900"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <FilterSelect
+                  label="Country"
+                  value={country}
+                  onChange={(v) => setCountry(v)}
+                  options={[
+                    { value: "", label: "Any country" },
+                    ...DESTINATIONS.map((c) => ({ value: c, label: c })),
+                  ]}
+                />
+                <FilterSelect
+                  label="Degree"
+                  value={degree}
+                  onChange={(v) => setDegree(v)}
+                  options={[
+                    { value: "", label: "Any degree" },
+                    ...DEGREES.map((d) => ({ value: d, label: d })),
+                  ]}
+                />
+                <FilterSelect
+                  label="Field"
+                  value={field}
+                  onChange={(v) => setField(v)}
+                  options={[
+                    { value: "", label: "Any field" },
+                    ...FIELDS.map((f) => ({ value: f, label: f })),
+                  ]}
+                />
+                <FilterSelect
+                  label="Funding"
+                  value={funding}
+                  onChange={(v) => setFunding(v)}
+                  options={FUNDING_TYPES}
+                />
+                <FilterSelect
+                  label="Type"
+                  value={scholarshipType}
+                  onChange={(v) => setScholarshipType(v)}
+                  options={SCHOLARSHIP_TYPES}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Popular searches */}
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-[11px] font-medium uppercase tracking-[0.16em] text-gray-400">
+              Popular
+            </span>
+            {SAMPLE_QUERIES.slice(0, 5).map((sq) => (
+              <button
+                key={sq}
+                onClick={() => fillAndSearch({ query: sq })}
+                disabled={loading}
+                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-900 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {sq}
+              </button>
+            ))}
+          </div>
+        </section>
 
         {/* Loading */}
         {loading ? (
-          <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
@@ -453,7 +567,7 @@ export default function ScholarshipsPage() {
           </div>
         ) : error ? (
           /* Error state */
-          <div className="mx-auto mt-16 max-w-md text-center">
+          <div className="mx-auto mt-20 max-w-md text-center">
             <p className="text-sm font-medium text-gray-900">
               We couldn&apos;t complete that search.
             </p>
@@ -469,16 +583,18 @@ export default function ScholarshipsPage() {
             </button>
           </div>
         ) : neverSearched ? (
-          /* Prompt state — nothing searched yet */
-          <div className="mx-auto mt-16 max-w-md text-center">
-            <p className="text-sm leading-relaxed text-gray-500">
-              Type a field, country, university, or scholarship name, then
-              press Search.
+          /* Calm prompt state — nothing searched yet */
+          <div className="mt-24 flex flex-col items-center text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-400 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-24px_rgba(0,0,0,0.2)]">
+              <Search className="h-5 w-5" />
+            </span>
+            <p className="mt-4 text-[13px] text-gray-400">
+              Verified scholarships from official sources.
             </p>
           </div>
         ) : searchedWithNoResults ? (
           /* Ran but nothing matched — smart, helpful empty state */
-          <div className="mx-auto mt-12 max-w-md text-center">
+          <div className="mx-auto mt-16 max-w-md text-center">
             {meta?.intent?.mode === "name" && meta.intent.namedScholarship ? (
               <>
                 <p className="text-sm font-medium text-gray-900">
@@ -529,52 +645,56 @@ export default function ScholarshipsPage() {
           </div>
         ) : (
           <>
-            {/* Results */}
-            <div className="mt-8 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-sm font-semibold text-gray-900">
-                {matched.length}{" "}
-                {matched.length === 1 ? "scholarship" : "scholarships"}
-              </h2>
-              <div className="flex items-center gap-4">
-                {meta && (
-                  <p className="text-[11px] text-gray-400">
-                    {meta.sourceCount} source
-                    {meta.sourceCount === 1 ? "" : "s"}
-                    {meta.fetched > 0 ? ` · ${meta.fetched} read` : ""}
-                    {meta.verifiedOfficial > 0
-                      ? ` · ${meta.verifiedOfficial} official verified`
-                      : ""}
-                    {meta.errors.length > 0
-                      ? ` · ${meta.errors.length} skipped`
-                      : ""}
-                    {meta.fromCache ? " · cached" : ""}
-                  </p>
-                )}
-                <button
-                  onClick={refresh}
-                  title="Run this search again, live"
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors hover:text-gray-900"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  Refresh
-                </button>
+            {/* Results — clear separation from the search area */}
+            <div className="mt-10 border-t border-gray-200 pt-8">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 className="text-sm font-semibold text-gray-900">
+                  {matched.length}{" "}
+                  {matched.length === 1 ? "scholarship" : "scholarships"}
+                </h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  {meta && (
+                    <p className="text-[11px] text-gray-400">
+                      {meta.sourceCount} source
+                      {meta.sourceCount === 1 ? "" : "s"}
+                      {meta.fetched > 0 ? ` · ${meta.fetched} read` : ""}
+                      {meta.verifiedOfficial > 0
+                        ? ` · ${meta.verifiedOfficial} official verified`
+                        : ""}
+                      {meta.errors.length > 0
+                        ? ` · ${meta.errors.length} skipped`
+                        : ""}
+                      {meta.fromCache ? " · cached" : ""}
+                    </p>
+                  )}
+                  <button
+                    onClick={refresh}
+                    title="Run this search again, live"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-600 transition-colors hover:border-gray-900 hover:text-gray-900"
+                  >
+                    <RefreshCw
+                      className={`h-3 w-3 ${loading ? "animate-spin" : ""}`}
+                    />
+                    Refresh
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {meta?.intent ? (
-              <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
-                {interpretingLine(meta.intent, meta.query)}
-              </p>
-            ) : null}
+              {meta?.intent ? (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-gray-400">
+                  {interpretingLine(meta.intent, meta.query)}
+                </p>
+              ) : null}
 
-            <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {matched.map((m) => (
-                <ScholarshipCard
-                  key={m.scholarship.id}
-                  scholarship={m.scholarship}
-                  match={m}
-                />
-              ))}
+              <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {matched.map((m) => (
+                  <ScholarshipCard
+                    key={m.scholarship.id}
+                    scholarship={m.scholarship}
+                    match={m}
+                  />
+                ))}
+              </div>
             </div>
           </>
         )}

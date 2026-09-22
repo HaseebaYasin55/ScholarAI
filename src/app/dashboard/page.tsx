@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from '@/components/Header';
 import {
+  ArrowRight,
   BadgeCheck,
   FileText,
 } from 'lucide-react';
@@ -24,6 +25,15 @@ const GREETINGS = [
   "You've got this",
   "Your future starts here",
 ];
+
+// Layered elevation: a soft contact shadow plus a wider diffuse one. Buttons
+// get a slightly denser shadow so they feel pressable.
+const HERO_ELEVATION =
+  'shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_36px_-26px_rgba(0,0,0,0.3)]';
+const BTN_BLACK_ELEVATION =
+  'shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_18px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_14px_24px_-12px_rgba(0,0,0,0.45)]';
+const BTN_LIGHT_ELEVATION =
+  'shadow-[0_1px_2px_rgba(0,0,0,0.05),0_8px_16px_-12px_rgba(0,0,0,0.25)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.06),0_12px_22px_-12px_rgba(0,0,0,0.3)]';
 
 export default function DashboardPage() {
   const { ready, user } = useRequireOnboarding();
@@ -50,47 +60,50 @@ export default function DashboardPage() {
       <main className="flex-1">
         <Header />
 
-        <div className="mx-auto max-w-7xl p-4 sm:p-8">
+        <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
           {/* Hero */}
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 mb-10">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-gray-400">
-                Your personalized study-abroad workspace
-              </p>
-              <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-gray-900 mt-2">
-                {greeting}, {firstName}.
-              </h1>
-              <p className="text-gray-500 mt-2 max-w-xl">
-                Scholarships and SOPs — everything for your applications in
-                one calm place.
-              </p>
-            </div>
+          <section
+            className={`mb-8 overflow-hidden rounded-3xl border border-gray-200 bg-white p-6 sm:p-8 ${HERO_ELEVATION}`}
+          >
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-gray-400">
+                  ScholarAI workspace
+                </p>
+                <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                  {greeting}, {firstName}.
+                </h1>
+                <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-gray-500">
+                  Scholarships and SOPs — everything for your applications in
+                  one calm place.
+                </p>
+              </div>
 
-            {/* Quick actions */}
-            <div className="grid grid-cols-2 gap-2.5 sm:flex">
-              {QUICK_ACTIONS.map((action) => (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 transition-all duration-200 hover:border-gray-900 hover:shadow-[0_14px_30px_-18px_rgba(0,0,0,0.4)]"
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
-                    <action.icon className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold text-gray-900">
-                      {action.label}
-                    </span>
-                    <span className="hidden sm:block text-[11px] text-gray-400">
-                      {action.sub}
-                    </span>
-                  </span>
-                </Link>
-              ))}
+              {/* Primary actions */}
+              <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+                {QUICK_ACTIONS.map((action, index) => {
+                  const primary = index === 0;
+                  return (
+                    <Link
+                      key={action.href}
+                      href={action.href}
+                      className={`group inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-5 py-3 text-sm font-semibold transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 sm:w-auto ${
+                        primary
+                          ? `bg-gray-900 text-white hover:bg-gray-800 ${BTN_BLACK_ELEVATION}`
+                          : `border border-gray-300 bg-white text-gray-900 hover:border-gray-900 ${BTN_LIGHT_ELEVATION}`
+                      }`}
+                    >
+                      <action.icon className="h-4 w-4 shrink-0" />
+                      <span className="whitespace-nowrap">{action.label}</span>
+                      <ArrowRight className="h-4 w-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" />
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </section>
 
-          {/* Feature blocks */}
+          {/* Stats + applications */}
           <DashboardStats />
 
           <ApplicationCards />

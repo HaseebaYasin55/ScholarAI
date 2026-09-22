@@ -2,7 +2,9 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
+  ArrowRight,
   BookMarked,
   Calendar,
   Check,
@@ -10,6 +12,7 @@ import {
   Loader2,
   Pencil,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import Header from "@/components/Header";
 import SOPForm from "@/features/sop-generator/components/SOPForm";
@@ -51,6 +54,55 @@ const EMPTY_FORM: SOPFormValues = {
 };
 
 const EMPTY_PREFILL: SOPPrefillSource = { university: "", program: "" };
+
+function ProfileCard({ summary }: { summary: ProfileSummaryRow[] }) {
+  return (
+    <aside className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_14px_30px_-26px_rgba(0,0,0,0.3)]">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white shadow-[0_1px_2px_rgba(0,0,0,0.2),0_6px_12px_-8px_rgba(0,0,0,0.4)]">
+            <UserRound className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400">
+              Your profile
+            </p>
+            <h3 className="text-[14px] font-semibold tracking-tight text-gray-900">
+              Personalization
+            </h3>
+          </div>
+        </div>
+        <Link
+          href="/profile"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 transition-colors hover:border-gray-900 hover:text-gray-900"
+        >
+          Edit
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+      <ul className="divide-y divide-gray-100 px-5">
+        {summary.map((row) => (
+          <li
+            key={row.label}
+            className="flex items-start justify-between gap-3 py-2.5"
+          >
+            <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400">
+              {row.label}
+            </span>
+            <span className="truncate text-right text-[13px] font-medium text-gray-800">
+              {row.value || (
+                <span className="font-normal text-gray-400">Not specified</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="border-t border-gray-100 bg-gray-50/40 px-5 py-3 text-[11px] text-gray-400">
+        Your profile tailors each SOP — keep it up to date.
+      </p>
+    </aside>
+  );
+}
 
 export default function SOPGeneratorPage() {
   const { user, isAuthenticated, isLoading } = useAuthStore();
@@ -123,6 +175,7 @@ export default function SOPGeneratorPage() {
   const [editingSop, setEditingSop] = useState<SOP | null>(null);
   const [linkingSopId, setLinkingSopId] = useState<string | null>(null);
   const [deletingSopId, setDeletingSopId] = useState<string | null>(null);
+  const savedSectionRef = React.useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -154,6 +207,16 @@ export default function SOPGeneratorPage() {
       cancelled = true;
     };
   }, [user]);
+
+  // When the Saved SOPs section is highlighted (deep link from the application
+  // journey, or the header pill), bring it into view.
+  useEffect(() => {
+    if (openTab !== "saved") return;
+    savedSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [openTab]);
 
   const profileContext: SOPProfileContext = useMemo(() => {
     const fullName =
@@ -426,39 +489,27 @@ export default function SOPGeneratorPage() {
 
         <div className="mx-auto max-w-6xl p-4 sm:p-8">
           {/* Page header */}
-          <div className="mb-8">
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-gray-400">
-              Application documents
-            </p>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 mt-1">
-              SOP Generator
-            </h1>
-            <p className="text-gray-500 mt-1">
-              A university-specific statement of purpose, built from your profile and
-              your own instructions.
-            </p>
-          </div>
-
-          {/* Tabs */}
-          <div className="mb-6 grid w-full grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-gray-100 p-1">
-            <button
-              type="button"
-              onClick={() => setOpenTab("generate")}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                openTab === "generate"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-900"
-              }`}
-            >
-              Generate
-            </button>
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-gray-400">
+                Application documents
+              </p>
+              <h1 className="mt-1 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                SOP Generator
+              </h1>
+              <p className="mt-1 text-gray-500">
+                A university-specific statement of purpose, built from your profile and
+                your own instructions.
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => setOpenTab("saved")}
-              className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              aria-label="View saved SOPs"
+              className={`group inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 ${
                 openTab === "saved"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-900"
+                  ? "border-gray-900 bg-gray-900 text-white"
+                  : "border-gray-300 bg-white text-gray-700 hover:border-gray-900 hover:text-gray-900"
               }`}
             >
               <BookMarked className="h-4 w-4" />
@@ -466,7 +517,9 @@ export default function SOPGeneratorPage() {
               {sops.length > 0 && (
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
-                    openTab === "saved" ? "bg-gray-900 text-white" : "bg-gray-200 text-gray-600"
+                    openTab === "saved"
+                      ? "bg-white text-gray-900"
+                      : "bg-gray-900 text-white group-hover:bg-gray-800"
                   }`}
                 >
                   {sops.length}
@@ -481,211 +534,246 @@ export default function SOPGeneratorPage() {
             </div>
           )}
 
-          {openTab === "saved" ? (
-            <div>
-              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-gray-400">
-                    Your library
-                  </p>
-                  <h2 className="mt-1 text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
-                    Saved SOPs
-                  </h2>
-                  {linkApp && (
-                    <p className="mt-1 text-[13px] text-gray-500">
-                      Linking to application — {linkApp.university}
-                      {linkApp.program && linkApp.program !== "To be selected"
-                        ? ` · ${linkApp.program}`
-                        : ""}
-                    </p>
-                  )}
-                </div>
-                {sops.length > 0 && (
-                  <span className="inline-flex shrink-0 items-center rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white">
-                    {sops.length} {sops.length === 1 ? "SOP" : "SOPs"}
-                  </span>
-                )}
-              </div>
-
-              {linkApp && (
-                <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[13px] text-gray-600">
-                  Choose a saved SOP and press{" "}
-                  <span className="font-semibold text-gray-900">Link to this application</span> to
-                  attach it, then head back to your application journey.
-                </div>
-              )}
-
-              {sops.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
-                  <BookMarked className="mx-auto h-8 w-8 text-gray-300" />
-                  <p className="mt-3 text-sm font-semibold text-gray-900">No saved SOPs yet</p>
-                  <p className="mt-1 text-[13px] text-gray-500">
-                    Generate a statement of purpose and press Save SOP to build your library.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {sops.map((sop) => {
-                    const linkedHere = sop.application_id === linkAppId;
-                    const linkedApp = sop.application_id
-                      ? applications.find((a) => a.id === sop.application_id)
-                      : null;
-                    const isLinking = linkingSopId === sop.id;
-                    const isDeleting = deletingSopId === sop.id;
-                    return (
-                      <div
-                        key={sop.id}
-                        className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md"
-                      >
-                        <div className="flex-1 p-5">
-                          <div className="flex items-start justify-between gap-3">
-                            <h3 className="min-w-0 truncate text-[14px] font-semibold tracking-tight text-gray-900">
-                              {sop.university || "University"}
-                            </h3>
-                            {linkAppId && linkedHere ? (
-                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gray-900 bg-gray-900 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                <Check className="h-3 w-3" />
-                                Linked
-                              </span>
-                            ) : (
-                              <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                                Saved
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 truncate text-[13px] font-medium text-gray-600">
-                            {sop.program || "Program pending"}
-                          </p>
-                          <p className="mt-2 line-clamp-2 text-[12px] leading-relaxed text-gray-500">
-                            {previewOf(sop.content)}
-                          </p>
-                          {sop.application_id && !linkedHere && linkedApp && (
-                            <p className="mt-2 text-[11px] text-gray-400">
-                              Currently linked to {linkedApp.university}
-                            </p>
-                          )}
-                        </div>
-                        <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
-                              <Calendar className="h-3.5 w-3.5" />
-                              Saved {formatDate(sop.created_at)}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => openSavedSop(sop)}
-                                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-[11px] font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900"
-                              >
-                                <Pencil className="h-3 w-3" />
-                                Edit
-                              </button>
-                              {linkAppId && !linkedHere && (
-                                <button
-                                  type="button"
-                                  onClick={() => linkSopToApp(sop)}
-                                  disabled={isLinking}
-                                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-gray-900 bg-white px-2.5 text-[11px] font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                  {isLinking ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Link2 className="h-3 w-3" />
-                                  )}
-                                  Link
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => deleteSavedSop(sop)}
-                                disabled={isDeleting}
-                                aria-label="Delete saved SOP"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                {isDeleting ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3 w-3" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              {step === "form" && (
+          {step === "form" && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <div className="lg:col-span-2">
                 <SOPForm
                   formData={formData}
                   setFormData={setFormData}
-                  profileSummary={profileSummary}
                   canSubmit={canSubmit}
                   onSubmit={handleGenerate}
                 />
-              )}
-
-              {step === "generating" && (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 py-24 shadow-sm">
-                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
-                  <h3 className="mt-6 text-lg font-semibold tracking-tight text-gray-900">
-                    Writing your SOP…
-                  </h3>
-                  <p className="mt-2 max-w-sm text-center text-sm text-gray-500">
-                    Tailoring a {formData.program || "program"} statement for{" "}
-                    {formData.university || "your university"} from your profile and
-                    instructions.
-                  </p>
+              </div>
+              <div className="lg:col-span-1">
+                <div className="lg:sticky lg:top-6">
+                  <ProfileCard summary={profileSummary} />
                 </div>
-              )}
+              </div>
+            </div>
+          )}
 
-              {editingSop && step === "result" && result && (
-                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-gray-900">
-                      Editing a saved SOP
-                    </p>
-                    <p className="mt-0.5 truncate text-[12px] text-gray-500">
-                      {editingSop.university || "University"} · {editingSop.program || "Program"} —
-                      saved {formatDate(editingSop.created_at)}. Saving updates this saved draft.
-                    </p>
+          {step === "generating" && (
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_14px_30px_-26px_rgba(0,0,0,0.3)]">
+              <div className="flex items-start gap-4 p-6 sm:p-8">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gray-900 text-white shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_18px_-12px_rgba(0,0,0,0.5)]">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[15px] font-semibold tracking-tight text-gray-900">
+                    Writing your {formData.program.trim() || "program"} SOP…
+                  </h3>
+                  <p className="mt-1 text-[13px] leading-relaxed text-gray-500">
+                    Tailoring every paragraph for {formData.university.trim() || "your university"}{" "}
+                    from your profile and instructions. This usually takes about a minute.
+                  </p>
+                  <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-full w-2/3 animate-pulse rounded-full bg-gray-900" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === "result" && result && (
+            <div className="space-y-6">
+              {editingSop && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_14px_30px_-26px_rgba(0,0,0,0.3)]">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white shadow-[0_1px_2px_rgba(0,0,0,0.2),0_6px_12px_-8px_rgba(0,0,0,0.4)]">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-gray-900">
+                        Editing a saved SOP
+                      </p>
+                      <p className="mt-0.5 truncate text-[12px] text-gray-500">
+                        {editingSop.university || "University"} · {editingSop.program || "Program"}{" "}
+                        — saved {formatDate(editingSop.created_at)}. Saving updates this saved
+                        draft.
+                      </p>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={discardSavedEdit}
-                    className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900"
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900"
                   >
                     Start a new SOP
                   </button>
                 </div>
               )}
 
-              {step === "result" && result && (
-                <SOPResult
-                  content={result.content}
-                  suggestions={result.suggestions}
-                  university={formData.university.trim()}
-                  program={formData.program.trim()}
-                  wordLimit={wordLimit}
-                  setContent={handleSetContent}
-                  onRegenerate={handleRegenerate}
-                  onImprove={handleImprove}
-                  onCopy={handleCopy}
-                  onSave={handleSave}
-                  onDownloadWord={handleDownloadWord}
-                  onCheckClaims={handleCheckClaims}
-                  isCopying={isCopying}
-                  isImproving={isImproving}
-                  isSaving={isSaving}
-                  isSaved={isSaved}
-                />
-              )}
-            </>
+              <SOPResult
+                content={result.content}
+                suggestions={result.suggestions}
+                university={formData.university.trim()}
+                program={formData.program.trim()}
+                wordLimit={wordLimit}
+                setContent={handleSetContent}
+                onRegenerate={handleRegenerate}
+                onImprove={handleImprove}
+                onCopy={handleCopy}
+                onSave={handleSave}
+                onDownloadWord={handleDownloadWord}
+                onCheckClaims={handleCheckClaims}
+                isCopying={isCopying}
+                isImproving={isImproving}
+                isSaving={isSaving}
+                isSaved={isSaved}
+              />
+            </div>
           )}
+
+          {/* Saved SOPs panel */}
+          <section
+            ref={savedSectionRef}
+            aria-label="Saved SOPs"
+            className={`mt-10 scroll-mt-6 rounded-2xl border bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_14px_30px_-26px_rgba(0,0,0,0.3)] transition-colors duration-200 sm:p-6 ${
+              openTab === "saved"
+                ? "border-gray-900/40 ring-2 ring-gray-900/5"
+                : "border-gray-200"
+            }`}
+          >
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+                  Your library
+                </p>
+                <h2 className="mt-1 text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+                  Saved SOPs
+                </h2>
+                <p className="mt-1 text-[12px] text-gray-500">
+                  Edit to keep writing, or link one to a tracked application.
+                </p>
+                {linkApp && (
+                  <p className="mt-1.5 text-[12px] font-medium text-gray-700">
+                    Linking to application — {linkApp.university}
+                    {linkApp.program && linkApp.program !== "To be selected"
+                      ? ` · ${linkApp.program}`
+                      : ""}
+                  </p>
+                )}
+              </div>
+              {sops.length > 0 && (
+                <span className="inline-flex shrink-0 items-center rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white">
+                  {sops.length} {sops.length === 1 ? "SOP" : "SOPs"}
+                </span>
+              )}
+            </div>
+
+            {linkApp && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-gray-900/10 bg-gray-900/5 px-4 py-3 text-[13px] text-gray-700">
+                <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-gray-900" />
+                <p>
+                  Choose a saved SOP and press{" "}
+                  <span className="font-semibold text-gray-900">Link</span> to attach it to this
+                  application, then head back to your application journey.
+                </p>
+              </div>
+            )}
+
+            {sops.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50/40 px-6 py-14 text-center">
+                <BookMarked className="mx-auto h-8 w-8 text-gray-300" />
+                <p className="mt-3 text-sm font-semibold text-gray-900">No saved SOPs yet</p>
+                <p className="mt-1 text-[13px] text-gray-500">
+                  Generate a statement of purpose and press Save SOP to build your library.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {sops.map((sop) => {
+                  const linkedHere = sop.application_id === linkAppId;
+                  const linkedApp = sop.application_id
+                    ? applications.find((a) => a.id === sop.application_id)
+                    : null;
+                  const isLinking = linkingSopId === sop.id;
+                  const isDeleting = deletingSopId === sop.id;
+                  return (
+                    <div
+                      key={sop.id}
+                      className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_20px_-18px_rgba(0,0,0,0.4)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_14px_28px_-18px_rgba(0,0,0,0.45)]"
+                    >
+                      <div className="flex-1 p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="min-w-0 truncate text-[14px] font-semibold tracking-tight text-gray-900">
+                            {sop.university || "University"}
+                          </h3>
+                          {linkAppId && linkedHere ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gray-900 bg-gray-900 px-2 py-0.5 text-[10px] font-semibold text-white">
+                              <Check className="h-3 w-3" />
+                              Linked
+                            </span>
+                          ) : (
+                            <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                              Saved
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 truncate text-[13px] font-medium text-gray-600">
+                          {sop.program || "Program pending"}
+                        </p>
+                        <p className="mt-2 line-clamp-2 text-[12px] leading-relaxed text-gray-500">
+                          {previewOf(sop.content)}
+                        </p>
+                        {sop.application_id && !linkedHere && linkedApp && (
+                          <p className="mt-2 text-[11px] text-gray-400">
+                            Currently linked to {linkedApp.university}
+                          </p>
+                        )}
+                      </div>
+                      <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
+                            <Calendar className="h-3.5 w-3.5" />
+                            Saved {formatDate(sop.created_at)}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openSavedSop(sop)}
+                              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-[11px] font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </button>
+                            {linkAppId && !linkedHere && (
+                              <button
+                                type="button"
+                                onClick={() => linkSopToApp(sop)}
+                                disabled={isLinking}
+                                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-gray-900 bg-white px-2.5 text-[11px] font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {isLinking ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Link2 className="h-3 w-3" />
+                                )}
+                                Link
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => deleteSavedSop(sop)}
+                              disabled={isDeleting}
+                              aria-label="Delete saved SOP"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {isDeleting ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
       </main>
     </div>
