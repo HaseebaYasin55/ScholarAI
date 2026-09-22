@@ -34,8 +34,8 @@ import { scholarshipStatus, type ScholarshipStatusId } from "./scholarship-statu
 import { cacheKey, getCached, setCached, persistResults } from "./cache";
 
 /** Short negative-cache TTL for "search provider temporarily unavailable" so
- *  repeated identical clicks don't re-hammer DuckDuckGo, while still recovering
- *  quickly once the provider clears up. */
+ *  repeated identical clicks don't re-hammer the search provider, while still
+ *  recovering quickly once the provider clears up. */
 const UNAVAILABLE_TTL_MS = 90_000;
 
 /** In-process coalescing: identical concurrent requests share one pipeline run
@@ -656,8 +656,8 @@ async function runSearch(params: {
         intent,
         transientFailure: true,
       });
-      // Negative-cache briefly so duplicate retries don't re-hammer DuckDuckGo,
-      // but recover quickly once the provider comes back.
+      // Negative-cache briefly so duplicate retries don't re-hammer the search
+      // provider, but recover quickly once the provider comes back.
       setCached(key, response, UNAVAILABLE_TTL_MS);
       return response;
     }

@@ -183,7 +183,7 @@ User query
 Intent classification (heuristic, offline — no LLM)
    │
    ▼
-Parallel web search (DuckDuckGo)
+Parallel web search (Tavily Search API)
    │
    ▼
 Aggregate results → hard-prune non-official sources
@@ -355,7 +355,7 @@ src/
 │   ├── supabase.ts             # Server/client Supabase clients
 │   ├── scholarship/
 │   │   ├── search.ts           # Discovery pipeline orchestrator
-│   │   ├── web-search.ts       # DuckDuckGo search adapter (no key)
+│   │   ├── web-search.ts       # Tavily Search API adapter (server key)
 │   │   ├── web.ts              # Host blocklists, trust model, URL utilities
 │   │   ├── verify.ts           # Official-source verification (fail-closed)
 │   │   ├── extract.ts          # LLM extraction schema + prompts
@@ -382,6 +382,7 @@ supabase/
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Public anon key (RLS applies) |
 | `SUPABASE_SERVICE_ROLE_KEY` | ⬜ | Catalog persistence / backfill (scraper) — safe to leave empty for live discovery only |
 | `GROQ_API_KEY` | ✅ | Primary LLM provider |
+| `TAVILY_API_KEY` | ✅ | Web discovery (scholarship search provider) |
 | `GEMINI_API_KEY` | ⬜ | SOP-generation fallback provider |
 | `RESEND_API_KEY` | ⬜ | Deadline / reminder emails |
 | `CRON_SECRET` | ⬜ | Auth for the scheduled alert endpoint |
