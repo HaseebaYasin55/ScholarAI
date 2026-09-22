@@ -61,7 +61,6 @@ export async function POST(request: Request) {
   try {
     const page = await fetchPageText(url.href, FETCH_TIMEOUT_MS, {
       enrich: true,
-      includePdf: true,
     });
     const scholarship = await extractScholarship(page, { query: name || url.href });
     const fields = (scholarship?.fields ?? []).map((f) => f.trim()).filter(Boolean);

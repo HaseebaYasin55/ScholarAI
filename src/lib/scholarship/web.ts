@@ -4,7 +4,6 @@
 // We deliberately do NOT bypass CAPTCHAs, paywalls, or anti-bot measures.
 
 import * as cheerio from "cheerio";
-import { PDFParse } from "pdf-parse";
 import { robotsAllow } from "./robots";
 
 const USER_AGENT =
@@ -511,12 +510,6 @@ export interface FetchPageOptions {
    * state the deadline and the eligible programmes.
    */
   enrich?: boolean;
-  /**
-   * Also follow eligible-programme links that point at PDF documents. Many
-   * scholarship sources (SH university portals, government PDFs) publish the
-   * programme list only in a PDF, so the enrichment must be able to read them.
-   */
-  includePdf?: boolean;
 }
 
 // Anchor text / path signals used to pick worthwhile sibling pages.
@@ -538,7 +531,6 @@ export function findRelatedOfficialPages(
   baseUrl: string,
   html: string,
   max = ENRICH_MAX_PAGES,
-  options?: { includePdf?: boolean },
 ): string[] {
   const out: string[] = [];
   try {
@@ -560,7 +552,7 @@ export function findRelatedOfficialPages(
       if (base.hostname.endsWith(".blogspot.com") || abs.hostname.includes("api.")) return;
       const clean = `${abs.origin}${abs.pathname}${abs.search}`;
       if (ENRICH_SKIP.test(clean)) return;
-      if (/\.pdf(\?|$)/i.test(clean) && options?.includePdf !== true) return;
+      if (/\.pdf(\?|$)/i.test(clean)) return; // PDFs can't be read server-side
       if (abs.pathname === "/") return;
       if (abs.pathname === base.pathname) return;
       const label = $(el).text().replace(/\s+/g, " ").trim().slice(0, 140);
@@ -573,101 +565,6 @@ export function findRelatedOfficialPages(
     // link graph unavailable → plain page only
   }
   return out;
-}
-
-function titleFromPdfUrl(url: string): string {
-  try {
-    const tail = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
-    return tail.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ").trim();
-  } catch {
-    return "";
-  }
-}
-
-/**
- * Fetch a PDF document, cap its size, and extract its plain text via pdf.js.
- * Used to read eligible-programme lists that official sources publish only as
- * PDFs. Fails loudly so the pipeline can skip it gracefully.
- */
-export async function fetchPdfText(
-  url: string,
-  timeoutMs = 8_000,
-): Promise<FetchedPage> {
-  if (!(await robotsAllow(url))) {
-    throw new PageFetchError("Blocked by robots.txt");
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "application/pdf,application/octet-stream",
-        "Accept-Language": "en-US,en;q=0.8",
-      },
-    });
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    throw new PageFetchError(
-      `Request failed (${reason.includes("abort") ? "timeout" : reason})`,
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!response.ok) {
-    throw new PageFetchError(`HTTP ${response.status}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  if (arrayBuffer.byteLength > MAX_BYTES) {
-    throw new PageFetchError("Page too large");
-  }
-
-  const bytes = new Uint8Array(arrayBuffer);
-  if (bytes.length < 8) throw new PageFetchError("Not a PDF");
-  const magic = String.fromCharCode(
-    bytes[0],
-    bytes[1],
-    bytes[2],
-    bytes[3],
-    bytes[4],
-  );
-  if (!magic.startsWith("%PDF-")) {
-    throw new PageFetchError("Not a PDF");
-  }
-
-  let text: string;
-  try {
-    const parser = new PDFParse({ data: bytes });
-    const parsed = await parser.getText();
-    text = (parsed?.text ?? "")
-      .replace(/[ \t]+\n/g, "\n")
-      .replace(/[ \t]{2,}/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-    await parser.destroy();
-  } catch {
-    throw new PageFetchError("PDF text unreadable");
-  }
-
-  if (text.length < 20) {
-    throw new PageFetchError("Page too thin");
-  }
-
-  return {
-    url,
-    host: getUrlHost(url),
-    trust: domainTrust(url),
-    text,
-    title: titleFromPdfUrl(url) || "Eligible programmes",
-    fetchedAt: new Date().toISOString(),
-  };
 }
 
 /**
@@ -734,18 +631,13 @@ export async function fetchPageText(
   }
 
   if (options?.enrich) {
-    const links = findRelatedOfficialPages(url, body, ENRICH_MAX_PAGES, {
-      includePdf: options.includePdf,
-    });
+    const links = findRelatedOfficialPages(url, body, ENRICH_MAX_PAGES);
     let extra = "";
     for (const link of links) {
-      const isPdf = /\.pdf(\?|$)/i.test(link);
       try {
-        const sibling = isPdf
-          ? await fetchPdfText(link, Math.min(timeoutMs, 6_000))
-          : await fetchPageText(link, Math.min(timeoutMs, 6_000));
+        const sibling = await fetchPageText(link, Math.min(timeoutMs, 6_000));
         const label = sibling.title.trim() || link;
-        extra += `\n\n[RELATED OFFICIAL PAGE${isPdf ? " (PDF)" : ""}: ${label}] (${link})\n${sibling.text}`;
+        extra += `\n\n[RELATED OFFICIAL PAGE: ${label}] (${link})\n${sibling.text}`;
         if (extra.length > ENRICH_BUDGET_CHARS) break;
       } catch {
         // sibling unreadable / robots-disallowed → skip quietly

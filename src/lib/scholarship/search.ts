@@ -705,7 +705,7 @@ async function runSearch(params: {
   const pages = await mapConcurrent<WebResult, FetchedPage>(
     toFetch,
     FETCH_CONCURRENCY,
-    (candidate) => fetchPageText(candidate.url, FETCH_TIMEOUT_MS, { enrich: true, includePdf: true }),
+    (candidate) => fetchPageText(candidate.url, FETCH_TIMEOUT_MS, { enrich: true }),
   );
   const fetchedSet = new Set(pages.map((p) => p.url));
   for (const candidate of toFetch) {
