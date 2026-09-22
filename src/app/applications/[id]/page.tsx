@@ -68,7 +68,7 @@ export default function ApplicationJourneyPage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="mx-auto max-w-5xl px-6 py-8">
-        <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/applications"
             className="inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-900"

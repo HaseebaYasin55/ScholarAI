@@ -25,8 +25,8 @@ export default function ReadinessProgress() {
           <Target className="w-6 h-6 text-primary-ink" />
         </div>
       </div>
-      <div className="flex items-center gap-6">
-        <div className="relative w-32 h-32">
+      <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
+        <div className="relative h-32 w-32 shrink-0">
           <svg className="w-full h-full" viewBox="0 0 100 100">
             <circle
               className="text-gray-100 stroke-current"

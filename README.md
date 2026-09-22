@@ -4,7 +4,7 @@
 
 ScholarAI is a full-stack study-abroad assistant. It searches the open web for real, currently-open scholarships — always pointing back to official university and scholarship pages — extracts structured eligibility and deadline data with AI, and walks you through each application from choosing a program to submitting it, with a Statement of Purpose (SOP) generator and a claim checker to keep your materials honest.
 
-**Visit the app:** `https://scholarai.local`
+**Visit the app:** [ScholarAI](https://scholar-ai-opal.vercel.app/)
 
 ---
 
@@ -450,3 +450,8 @@ The application is **functional end-to-end**: authentication and onboarding, ver
 - Claim-checker history and compare-across-applications views.
 - Admin/moderation surface for verifying and editing the official catalog.
 - Expanded country/destination coverage and more regional authorities in the trusted list.
+
+## Contributors
+
+- [Haseeba Yasin](https://github.com/HaseebaYasin55)
+- [Maryam Sarfaraz](https://github.com/MaryamSarfraz77)

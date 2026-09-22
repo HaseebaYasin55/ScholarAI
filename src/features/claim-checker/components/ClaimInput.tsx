@@ -40,7 +40,7 @@ export default function ClaimInput({
       )}
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card">
-        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50/70 px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-gray-200 bg-gray-50/70 px-6 py-4">
           <span className="flex items-center gap-2 text-sm font-semibold text-gray-700">
             <FileText className="h-4 w-4 text-gray-400" />
             Your document
@@ -53,12 +53,12 @@ export default function ClaimInput({
           value={content}
           onChange={(e) => setContent(e.target.value)}
           spellCheck
-          className="min-h-[420px] w-full resize-none bg-white px-8 py-8 font-serif text-[15px] leading-7 text-gray-800 focus:outline-none md:px-12"
+          className="min-h-[420px] w-full resize-none bg-white px-5 py-8 font-serif text-[15px] leading-7 text-gray-800 focus:outline-none sm:px-8 md:px-12"
           placeholder={
             "Paste your Statement of Purpose here,\n\nor generate one in SOP Generator and choose “Check claims”."
           }
         ></textarea>
-        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/40 px-6 py-3 text-xs text-gray-400">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-gray-100 bg-gray-50/40 px-6 py-3 text-xs text-gray-400">
           <span>We only flag factual statements — never your goals or motivation.</span>
           <span className="font-mono">
             {count} {count === 1 ? "word" : "words"}

@@ -43,9 +43,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Row({ label, value }: { label: string; value?: string | number | null }) {
   if (value == null || value === "") return null;
   return (
-    <div className="flex items-start justify-between gap-4 py-2 text-sm not-last:border-b not-last:border-gray-100">
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-2 text-sm not-last:border-b not-last:border-gray-100">
       <span className="text-gray-500">{label}</span>
-      <span className="text-right font-medium text-gray-900">{String(value)}</span>
+      <span className="min-w-0 text-right font-medium text-gray-900">{String(value)}</span>
     </div>
   );
 }

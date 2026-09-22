@@ -186,7 +186,7 @@ export default function SOPForm({
                   placeholder="e.g. 750"
                   value={formData.wordLimit}
                   onChange={(e) => patch("wordLimit", e.target.value)}
-                  className="w-full bg-transparent px-4 py-3 font-mono text-[15px] text-gray-900 outline-none placeholder:font-sans placeholder:text-gray-400"
+                  className="min-w-0 w-full bg-transparent px-4 py-3 font-mono text-[15px] text-gray-900 outline-none placeholder:font-sans placeholder:text-gray-400"
                 />
                 <span className="shrink-0 pr-4 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   max words

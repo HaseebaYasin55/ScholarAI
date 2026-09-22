@@ -634,7 +634,7 @@ export default function ApplicationJourney({
                 {docStates.map((d) => (
                   <li
                     key={d.required}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5"
+                    className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5"
                   >
                     <span className="min-w-0 truncate text-[13px] text-gray-700">
                       {d.required}
@@ -835,9 +835,9 @@ export default function ApplicationJourney({
               ].map((item) => (
                 <li
                   key={item.label}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3.5 py-2.5"
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-gray-200 px-3.5 py-2.5"
                 >
-                  <span className="text-[13px] text-gray-700">{item.label}</span>
+                  <span className="min-w-0 text-[13px] text-gray-700">{item.label}</span>
                   {item.valid ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-deep bg-primary-deep px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-chip">
                       <Check className="h-3 w-3" />

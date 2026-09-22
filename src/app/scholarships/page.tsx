@@ -503,7 +503,7 @@ export default function ScholarshipsPage() {
                 title={`Remove ${f.value}`}
                 className="group inline-flex items-center gap-1.5 rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-gray-800"
               >
-                <span className="max-w-[10rem] truncate">{f.value}</span>
+                <span className="sm:max-w-[10rem] sm:truncate">{f.value}</span>
                 <X className="h-3 w-3 opacity-70 transition-opacity group-hover:opacity-100" />
               </button>
             ))}

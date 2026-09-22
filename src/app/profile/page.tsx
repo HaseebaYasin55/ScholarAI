@@ -197,7 +197,7 @@ function InfoCell({ label, value }: { label: string; value?: React.ReactNode }) 
       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-gray-400">
         {label}
       </p>
-      <div className="mt-1.5 text-sm text-gray-900">
+      <div className="mt-1.5 break-words text-sm text-gray-900">
         {value ?? <span className="text-gray-400">Not specified</span>}
       </div>
     </div>
@@ -349,11 +349,11 @@ function DocumentManageActions({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 shrink-0">
+    <div className="flex items-center gap-1 shrink-0 sm:gap-0.5">
       <button
         onClick={() => onView(doc)}
         disabled={!doc.file_path}
-        className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+        className="p-2.5 text-gray-400 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed sm:p-2"
         title={doc.file_path ? 'Open document' : 'No file attached'}
       >
         <Eye className="h-4 w-4" />
@@ -372,7 +372,7 @@ function DocumentManageActions({
             disabled={replacing}
             onChange={(e) => onReplace(e, doc)}
           />
-          <span className="p-2 text-gray-400">
+          <span className="p-2.5 text-gray-400 sm:p-2">
             {replacing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -384,7 +384,7 @@ function DocumentManageActions({
       <button
         onClick={() => onDelete(doc.id)}
         disabled={replacing}
-        className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+        className="p-2.5 text-gray-400 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed sm:p-2"
         title="Remove document"
       >
         <Trash2 className="h-4 w-4" />
@@ -843,7 +843,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2.5">
+              <div className="flex shrink-0 flex-wrap items-center gap-2.5">
                 {!isEditing ? (
                   <button
                     onClick={startEditing}

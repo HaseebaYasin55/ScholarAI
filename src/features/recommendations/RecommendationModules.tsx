@@ -219,7 +219,7 @@ export default function RecommendationModules() {
     <div className="mb-8 space-y-6">
       {/* Recommended Scholarships */}
       <section>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-deep text-white shadow-chip">
               <BadgeCheck className="h-5 w-5" />

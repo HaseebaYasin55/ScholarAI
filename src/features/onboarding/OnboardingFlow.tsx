@@ -565,7 +565,7 @@ export default function OnboardingFlow() {
                     </>
                   )}
 
-                  <div className="flex items-center justify-between border-t border-gray-100 pt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-6">
                     {step > 0 ? (
                       <button
                         type="button"

@@ -171,7 +171,7 @@ export default function SOPResult({
         <div className="lg:col-span-3">
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div
-              className={`flex items-center justify-between border-b px-6 py-4 ${
+              className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-6 py-4 ${
                 isOver ? "border-red-200 bg-red-50/40" : "border-gray-200 bg-gray-50/70"
               }`}
             >
@@ -184,11 +184,11 @@ export default function SOPResult({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               spellCheck
-              className={`w-full min-h-[560px] resize-none bg-white px-8 py-8 font-serif text-[15px] leading-7 text-gray-800 focus:outline-none md:px-12 ${
+              className={`w-full min-h-[560px] resize-none bg-white px-5 py-8 font-serif text-[15px] leading-7 text-gray-800 focus:outline-none sm:px-8 md:px-12 ${
                 isOver ? "text-red-900/60" : ""
               }`}
             />
-            <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/40 px-6 py-3 text-xs text-gray-400">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-gray-100 bg-gray-50/40 px-6 py-3 text-xs text-gray-400">
               <span>Paragraphs are separated by blank lines.</span>
               <span className="font-mono">
                 {count} {count === 1 ? "word" : "words"}

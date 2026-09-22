@@ -58,7 +58,7 @@ const EMPTY_PREFILL: SOPPrefillSource = { university: "", program: "" };
 function ProfileCard({ summary }: { summary: ProfileSummaryRow[] }) {
   return (
     <aside className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_14px_30px_-26px_rgba(0,0,0,0.3)]">
-      <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white shadow-[0_1px_2px_rgba(0,0,0,0.2),0_6px_12px_-8px_rgba(0,0,0,0.4)]">
             <UserRound className="h-4 w-4" />
@@ -89,7 +89,7 @@ function ProfileCard({ summary }: { summary: ProfileSummaryRow[] }) {
             <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400">
               {row.label}
             </span>
-            <span className="truncate text-right text-[13px] font-medium text-gray-800">
+            <span className="min-w-0 text-right text-[13px] font-medium text-gray-800 sm:truncate">
               {row.value || (
                 <span className="font-normal text-gray-400">Not specified</span>
               )}
@@ -728,11 +728,11 @@ export default function SOPGeneratorPage() {
                             <Calendar className="h-3.5 w-3.5" />
                             Saved {formatDate(sop.created_at)}
                           </span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex flex-wrap items-center gap-1">
                             <button
                               type="button"
                               onClick={() => openSavedSop(sop)}
-                              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-[11px] font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900"
+                              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-[11px] font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900 sm:h-7"
                             >
                               <Pencil className="h-3 w-3" />
                               Edit
@@ -742,7 +742,7 @@ export default function SOPGeneratorPage() {
                                 type="button"
                                 onClick={() => linkSopToApp(sop)}
                                 disabled={isLinking}
-                                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-gray-900 bg-white px-2.5 text-[11px] font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-900 bg-white px-2.5 text-[11px] font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 sm:h-7"
                               >
                                 {isLinking ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -757,7 +757,7 @@ export default function SOPGeneratorPage() {
                               onClick={() => deleteSavedSop(sop)}
                               disabled={isDeleting}
                               aria-label="Delete saved SOP"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 sm:h-7 sm:w-7"
                             >
                               {isDeleting ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />

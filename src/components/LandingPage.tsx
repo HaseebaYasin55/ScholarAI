@@ -38,12 +38,12 @@ function CardSurface({
   delay?: string;
 }) {
   return (
-    <div className="rise-in relative flex items-stretch gap-5 sm:gap-7" style={{ animationDelay: delay }}>
+    <div className="rise-in relative flex items-stretch gap-3 sm:gap-7" style={{ animationDelay: delay }}>
       {/* Rail stamp */}
-      <div className="relative flex w-11 shrink-0 justify-center">
+      <div className="relative flex w-9 shrink-0 justify-center sm:w-11">
         <span
           aria-hidden="true"
-          className="absolute top-1 left-1/2 h-11 w-11 -translate-x-1/2 rounded-full border border-dashed border-gray-300"
+          className="absolute top-1 left-1/2 h-10 w-10 -translate-x-1/2 rounded-full border border-dashed border-gray-300 sm:h-11 sm:w-11"
         />
         <span
           className={`group-stamp z-10 mt-1.5 flex h-7 w-7 items-center justify-center rounded-full font-mono text-[10px] font-bold transition-all duration-300 ${
@@ -182,7 +182,7 @@ export default function LandingPage() {
       </header>
 
       <main className="flex-1 overflow-hidden">
-        <section className="relative mx-auto grid w-full max-w-6xl gap-14 px-6 py-16 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:gap-14 lg:py-28">
+        <section className="relative mx-auto grid w-full max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:gap-14 lg:py-28">
           {/* ambient tint */}
           <div
             aria-hidden="true"
@@ -396,7 +396,7 @@ export default function LandingPage() {
               className="sm:max-w-[92%] sm:ml-4"
             >
               <div className="relative">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <MiniBar
                     icon={<ClipboardList className="h-4 w-4" />}
                     title="Every application, one tracker"
