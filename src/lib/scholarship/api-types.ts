@@ -29,6 +29,13 @@ export interface SearchMeta {
   intent: IntentInfo | null;
   errors: string[];
   fromCache: boolean;
+  /**
+   * True when the search could not be completed because an upstream provider
+   * (web search / rate limiter) was temporarily unavailable — NOT a definitive
+   * "nothing exists". The client should show a retry message rather than a
+   * no-results state.
+   */
+  transientFailure: boolean;
 }
 
 export interface ScholarshipSearchResponse {

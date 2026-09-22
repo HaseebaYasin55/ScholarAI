@@ -2,6 +2,11 @@
 // Uses DuckDuckGo's public HTML endpoints (html, then lite as fallback). No API
 // key required; results are parsed from the HTML directly. We never bypass
 // CAPTCHAs or anti-bot measures — on repeated blocks the caller sees an error.
+//
+// DuckDuckGo answers shared/IP-heavy traffic with an anti-bot "anomaly"
+// challenge (HTTP 202 + a page with no result links). This module detects that
+// response, retries with gentle backoff, and surfaces a clear
+// rate-limit/blocked message instead of an empty "no results" set.
 
 import { isJunkUrl } from "./web";
 
@@ -161,7 +166,23 @@ const SEARCH_TIMEOUT_MS = 7_000;
 const USER_AGENT =
   "Mozilla/5.0 (compatible; ScholarAI-Discovery/1.0; +https://scholarai.local)";
 
-async function fetchDuck(url: string): Promise<string> {
+/** Backoff (ms) between search attempts. Kept gentle so a blocked provider is
+ *  not hammered further; bounded so a fully-blocked provider fails fast. */
+const RETRY_BACKOFF_MS = [0, 550, 1_200, 2_200];
+
+/** Signals that mark a DuckDuckGo anti-bot / anomaly page (there are no real
+ *  results to parse, regardless of HTTP status). */
+function isAnomalyChallenge(text: string): boolean {
+  const low = text.toLowerCase();
+  return (
+    low.includes("anomaly") ||
+    /id="challenge"|class="[^"]*challenge/i.test(low) ||
+    low.includes("verify you") ||
+    (low.includes("captcha") && low.includes("duckduckgo"))
+  );
+}
+
+async function fetchDuck(url: string): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
   try {
@@ -173,8 +194,13 @@ async function fetchDuck(url: string): Promise<string> {
         "Accept-Language": "en-US,en;q=0.8",
       },
     });
+    if ([429, 403, 202].includes(res.status)) {
+      // 429 = explicit rate limit; 202 = DuckDuckGo's anti-bot challenge;
+      // 403 = blocked. All mean "the provider is temporarily rate limiting us".
+      throw new Error(`Search provider rate limited (HTTP ${res.status})`);
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
+    return res;
   } finally {
     clearTimeout(timer);
   }
@@ -184,32 +210,50 @@ function encodeQuery(q: string): string {
   return encodeURIComponent(q.replace(/\s+/g, " ").trim());
 }
 
+/** Run ONE engine attempt and parse its results. Throws only when the engine
+ *  is blocked/rate-limited or returns an unparseable challenge page. */
+async function engineResults(engine: "html" | "lite", q: string): Promise<WebResult[]> {
+  const url =
+    engine === "html"
+      ? `https://html.duckduckgo.com/html/?q=${q}`
+      : `https://lite.duckduckgo.com/lite/?q=${q}`;
+  const res = await fetchDuck(url);
+  const text = await res.text();
+  if (isAnomalyChallenge(text)) {
+    throw new Error("Search provider rate limited (challenge page)");
+  }
+  const results =
+    engine === "html" ? parseDuckHtml(text) : parseDuckLite(text);
+  if (results.length === 0) {
+    // A 200 page with zero parseable results is effectively a bot block too.
+    throw new Error("Search provider returned no results");
+  }
+  return results.slice(0, 40);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /**
- * Search the web for scholarship pages. Tries the HTML endpoint first and
- * falls back to lite. Returns crawled results when available.
+ * Search the web for scholarship pages. Tries html then lite, with gentle
+ * retry/backoff, so a single transient rate-limit or challenge page can be
+ * survived. Throws a clear, user-facing error when the provider is genuinely
+ * blocked/rate-limited.
  */
 export async function searchWeb(query: string): Promise<WebResult[]> {
   const q = encodeQuery(query);
-
-  // html.duckduckgo.com
-  try {
-    const html = await fetchDuck(`https://html.duckduckgo.com/html/?q=${q}`);
-    const results = parseDuckHtml(html);
-    if (results.length > 0) return results.slice(0, 40);
-  } catch {
-    // fall to lite
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) {
+      const jitter = Math.floor(Math.random() * 350);
+      await sleep(RETRY_BACKOFF_MS[attempt] + jitter);
+    }
+    const engine = attempt % 2 === 0 ? "html" : "lite";
+    try {
+      return await engineResults(engine, q);
+    } catch {
+      // attempt failed (blocked/rate-limited/unparseable) → back off + retry
+    }
   }
-
-  // lite.duckduckgo.com
-  try {
-    const html = await fetchDuck(`https://lite.duckduckgo.com/lite/?q=${q}`);
-    const results = parseDuckLite(html);
-    if (results.length > 0) return results.slice(0, 40);
-  } catch {
-    // both engines failed
-  }
-
   throw new Error(
-    "Web search is temporarily unavailable (rate limited or blocked). Try again in a moment.",
+    "Web search is temporarily unavailable (DuckDuckGo appears rate limited or blocked). Please try again in a minute.",
   );
 }

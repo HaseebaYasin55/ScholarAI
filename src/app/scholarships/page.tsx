@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   RefreshCw,
@@ -116,17 +116,21 @@ function toMatchPrefs(prefs: PrefsRow | null): MatchPreferences {
       };
 }
 
-async function runSearchRequest(payload: {
-  query: string;
-  filters: Record<string, unknown>;
-  limit?: number;
-  refresh?: boolean;
-  citizenship?: string | null;
-}): Promise<ScholarshipSearchResponse> {
+async function runSearchRequest(
+  payload: {
+    query: string;
+    filters: Record<string, unknown>;
+    limit?: number;
+    refresh?: boolean;
+    citizenship?: string | null;
+  },
+  signal?: AbortSignal,
+): Promise<ScholarshipSearchResponse> {
   const res = await fetch("/api/scholarships/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -149,6 +153,7 @@ const EMPTY_META: SearchMeta = {
   intent: null,
   errors: [],
   fromCache: false,
+  transientFailure: false,
 };
 
 type FilterKey = "country" | "degree" | "field" | "funding" | "type";
@@ -203,6 +208,13 @@ export default function ScholarshipsPage() {
   const [error, setError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Client-side request control: identical payloads that are already running
+  // are deduplicated (never fire a duplicate network call), a new search
+  // cancels the previous in-flight one, and stale/aborted responses are
+  // ignored so a superseded request can never repaint the results.
+  const activeRequest = useRef<{ key: string; controller: AbortController } | null>(null);
+  const requestSeq = useRef(0);
+
   // Load preferences (used only for ranking/clarifying matches, never as a
   // default search query).
   useEffect(() => {
@@ -241,34 +253,53 @@ export default function ScholarshipsPage() {
     }) => {
       if (!opts.silent) setLoading(true);
       setError("");
+
+      // The profile `country` is the user's citizenship — the pipeline uses
+      // it to filter scholarships whose official source explicitly excludes
+      // that nationality.
+      const citizenship = user?.country?.trim() || null;
+      const payload = {
+        query: opts.q,
+        filters: {
+          country: opts.c || null,
+          degreeLevels: opts.d ? [opts.d] : [],
+          field: opts.f || null,
+          funding: opts.fu || null,
+          scholarshipType: opts.st || null,
+        },
+        limit: 12,
+        refresh: opts.refresh,
+        citizenship,
+      };
+      const dedupeKey = JSON.stringify(payload);
+
+      // The exact same search is already running → do not launch a duplicate.
+      if (activeRequest.current?.key === dedupeKey) return;
+
+      const seq = ++requestSeq.current;
+      activeRequest.current?.controller?.abort();
+      const controller = new AbortController();
+      activeRequest.current = { key: dedupeKey, controller };
+
       try {
-        // The profile `country` is the user's citizenship — the pipeline uses
-        // it to filter scholarships whose official source explicitly excludes
-        // that nationality.
-        const citizenship = user?.country?.trim() || null;
-        const payload = {
-          query: opts.q,
-          filters: {
-            country: opts.c || null,
-            degreeLevels: opts.d ? [opts.d] : [],
-            field: opts.f || null,
-            funding: opts.fu || null,
-            scholarshipType: opts.st || null,
-          },
-          limit: 12,
-          refresh: opts.refresh,
-          citizenship,
-        };
-        const res = await runSearchRequest(payload);
+        const res = await runSearchRequest(payload, controller.signal);
+        if (seq !== requestSeq.current) return;
         setScholarships(res.results);
         setMeta(res.meta);
         setResults(res.results, res.meta);
       } catch (err) {
+        // Superseded or aborted request — never paint its failure.
+        if (seq !== requestSeq.current) return;
         setError(err instanceof Error ? err.message : "Search failed.");
         setScholarships([]);
         setMeta(EMPTY_META);
       } finally {
-        if (!opts.silent) setLoading(false);
+        if (seq === requestSeq.current) {
+          if (!opts.silent) setLoading(false);
+        }
+        if (activeRequest.current?.controller === controller) {
+          activeRequest.current = null;
+        }
       }
     },
     [setResults, user],
@@ -339,6 +370,7 @@ export default function ScholarshipsPage() {
   const neverSearched = !loading && !error && matched.length === 0 && meta === null;
   const searchedWithNoResults =
     !loading && !error && matched.length === 0 && meta !== null;
+  const transientOutage = !loading && !error && meta?.transientFailure === true;
 
   // Selected filters as removable chips (labels, not raw codes).
   const fundingLabel =
@@ -573,6 +605,24 @@ export default function ScholarshipsPage() {
             </p>
             <p className="mt-2 text-[13px] leading-relaxed text-gray-400">
               {error}
+            </p>
+            <button
+              onClick={submit}
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Try again
+            </button>
+          </div>
+        ) : transientOutage ? (
+          /* Upstream web-search provider is temporarily unavailable */
+          <div className="mx-auto mt-20 max-w-md text-center">
+            <p className="text-sm font-medium text-gray-900">
+              Web search is temporarily unavailable.
+            </p>
+            <p className="mt-2 text-[13px] leading-relaxed text-gray-400">
+              {meta?.errors?.[0] ??
+                "The search provider is rate limiting us right now. This is temporary — wait a moment and try again."}
             </p>
             <button
               onClick={submit}

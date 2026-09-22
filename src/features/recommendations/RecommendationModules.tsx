@@ -12,11 +12,17 @@ import type { Scholarship } from "@/lib/scholarship/types";
 import { useScholarshipResultsStore } from "@/store/scholarshipResultsStore";
 import ScholarshipCard from "@/components/scholarships/ScholarshipCard";
 import { verifiedOfficialUrl } from "@/features/application-tracking/scholarshipApps";
+import type { SearchMeta } from "@/lib/scholarship/api-types";
 
 // Flagship programmes that should surface first when the catalog contains a
 // real, verified row for them and the user's profile matches. These are never
 // injected — if they are absent from the catalog they simply do not appear.
 const PRIORITY_PROGRAMS = ["daad", "stipendium hungaricum", "erasmus mundus"];
+
+/** Module-level in-flight guard: the same live-discovery key is fetched only
+ *  once at a time, even across StrictMode remount/navigation, so duplicate
+ *  `/api/scholarships/search` calls are never fired for an identical query. */
+const liveDiscoveryInFlight = new Set<string>();
 
 function priorityRank(name: string): number {
   const n = name.toLowerCase();
@@ -114,6 +120,12 @@ export default function RecommendationModules() {
 
     // Defer state changes out of the synchronous effect body.
     const t = setTimeout(() => {
+      // Duplicate concurrent identical queries are suppressed entirely — no
+      // reason to hammer the search pipeline twice.
+      const liveKey = `live:${preferredField.trim().toLowerCase()}`;
+      if (liveDiscoveryInFlight.has(liveKey)) return;
+
+      liveDiscoveryInFlight.add(liveKey);
       setLiveLoading(true);
       setLiveError("");
 
@@ -133,16 +145,32 @@ export default function RecommendationModules() {
         }),
       })
         .then((r) => r.json().catch(() => ({})))
-        .then((data: { results?: Scholarship[]; error?: string }) => {
+        .then((data: { results?: Scholarship[]; error?: string; meta?: SearchMeta }) => {
           if (data.error) {
+            setLive([]);
             setLiveError(data.error);
-          } else if (data.results) {
+          } else if (data.meta?.transientFailure) {
+            // Upstream search provider is temporarily out — show the friendly
+            // message instead of pretending "nothing exists".
+            setLive([]);
+            setLiveError(
+              data.meta.errors?.[0] ??
+                "Live discovery is temporarily unavailable.",
+            );
+          } else if (data.results?.length) {
             setLive(data.results);
+            setLiveError("");
             setResults(data.results, null);
           }
         })
-        .catch(() => setLiveError("Live discovery failed."))
-        .finally(() => setLiveLoading(false));
+        .catch(() => {
+          setLive([]);
+          setLiveError("Live discovery failed.");
+        })
+        .finally(() => {
+          liveDiscoveryInFlight.delete(liveKey);
+          setLiveLoading(false);
+        });
     }, 0);
 
     return () => clearTimeout(t);

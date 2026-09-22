@@ -31,8 +31,53 @@ export async function sendApplicationEmail({
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Helper to generate branded email templates
 export const EmailTemplates = {
+  DeadlineReminder: (payload: {
+    scholarship: string;
+    program: string;
+    deadline: string;
+    daysLeft: number;
+    progress: number;
+    missingItems: string[];
+    applicationUrl: string;
+  }) => `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 16px; padding: 24px;">
+      <h2 style="color: #4f46e5; margin-bottom: 8px;">⏰ ${payload.daysLeft} ${payload.daysLeft === 1 ? "day" : "days"} left</h2>
+      <p style="color: #374151; font-size: 16px; line-height: 1.5; margin-bottom: 16px;">
+        The deadline for <strong>${escapeHtml(payload.scholarship)}</strong> is
+        <strong>${escapeHtml(payload.program)}</strong> on
+        <strong>${escapeHtml(payload.deadline)}</strong>.
+      </p>
+      <div style="background: #f9fafb; padding: 16px; border-radius: 12px; margin: 16px 0; border-left: 4px solid #4f46e5;">
+        <p style="margin: 0; font-size: 13px; color: #6b7280;">Application readiness</p>
+        <p style="margin: 4px 0 0; font-weight: bold; color: #111827;">${payload.progress}% complete</p>
+        <div style="margin-top: 8px; background: #e5e7eb; border-radius: 999px; height: 8px;">
+          <div style="width: ${Math.max(0, Math.min(100, payload.progress))}%; background: #4f46e5; border-radius: 999px; height: 8px;"></div>
+        </div>
+      </div>
+      ${
+        payload.missingItems.length > 0
+          ? `<div style="background: #fef2f2; padding: 16px; border-radius: 12px; margin: 16px 0; border-left: 4px solid #ef4444;">
+              <p style="margin: 0 0 8px; font-size: 13px; color: #6b7280;">Still missing for this application</p>
+              <ul style="margin: 0; padding-left: 18px; color: #991b1b; font-size: 14px;">
+                ${payload.missingItems.map((item) => `<li style="margin: 4px 0;">${escapeHtml(item)}</li>`).join("")}
+              </ul>
+            </div>`
+          : ""
+      }
+      <a href="${payload.applicationUrl}" style="display: inline-block; background: #4f46e5; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Open Application</a>
+    </div>
+  `,
   DeadlineAlert: (title: string, date: string, urgency: string) => `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 16px; padding: 24px;">
       <h2 style="color: #4f46e5; margin-bottom: 16px;">📅 Deadline Alert</h2>

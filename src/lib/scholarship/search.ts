@@ -33,6 +33,16 @@ import { fallbackIntent, fieldMatches, buildSearchQueries, type SearchIntent } f
 import { scholarshipStatus, type ScholarshipStatusId } from "./scholarship-status";
 import { cacheKey, getCached, setCached, persistResults } from "./cache";
 
+/** Short negative-cache TTL for "search provider temporarily unavailable" so
+ *  repeated identical clicks don't re-hammer DuckDuckGo, while still recovering
+ *  quickly once the provider clears up. */
+const UNAVAILABLE_TTL_MS = 90_000;
+
+/** In-process coalescing: identical concurrent requests share one pipeline run
+ *  instead of re-running the whole search (prevents duplicate calls when the
+ *  client (or StrictMode) fires the same payload twice). */
+const inFlight = new Map<string, Promise<ScholarshipSearchResponse>>();
+
 export interface SearchParams {
   query: string;
   filters?: SearchFilters;
@@ -190,6 +200,15 @@ const getHost = (url: string): string => {
     return new URL(url).hostname;
   } catch {
     return url;
+  }
+};
+
+/** Hostname for a possibly-malformed URL without ever throwing. */
+const safeHostname = (url: string): string => {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "unknown source";
   }
 };
 
@@ -538,6 +557,29 @@ export async function discoverScholarships(
     if (cached) return cached;
   }
 
+  // Coalesce identical concurrent requests (duplicate client calls, StrictMode
+  // double-invokes) into ONE pipeline run.
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+
+  const run = runSearch({ key, query, filters, limit, citizenship });
+  inFlight.set(key, run);
+  try {
+    return await run;
+  } finally {
+    if (inFlight.get(key) === run) inFlight.delete(key);
+  }
+}
+
+async function runSearch(params: {
+  key: string;
+  query: string;
+  filters: SearchFilters;
+  limit: number;
+  citizenship: string | null;
+}): Promise<ScholarshipSearchResponse> {
+  const { key, query, filters, limit, citizenship } = params;
+
   // ── Understand what the user MEANS (field? named programme? country/degree/
   //     funding?). DETERMINISTIC — no LLM, instant; aliases (Fullbright →
   //     Fulbright, Stipendium Hungary → Stipendium Hungaricum, …) handled fast.
@@ -596,9 +638,28 @@ export async function discoverScholarships(
 
   if (sourceCount === 0) {
     if (anyTechnicalFailure) {
-      throw new Error(
-        "Web search is temporarily unavailable (rate limited or blocked). Try again in a moment.",
-      );
+      // Every search engine attempt was blocked/rate-limited. This is a
+      // TRANSIENT provider outage, not "nothing exists" — degrade gracefully
+      // (200, empty, flagged) so the UI can retry, and never crash the search.
+      const message =
+        "Web search is temporarily unavailable (rate limited or blocked). Please try again in a minute.";
+      errors.push(message);
+      const response = buildResponse({
+        query,
+        webQuery,
+        sourceCount,
+        fetched: 0,
+        extracted: 0,
+        errors,
+        results: [],
+        key,
+        intent,
+        transientFailure: true,
+      });
+      // Negative-cache briefly so duplicate retries don't re-hammer DuckDuckGo,
+      // but recover quickly once the provider comes back.
+      setCached(key, response, UNAVAILABLE_TTL_MS);
+      return response;
     }
     errors.push("No relevant web results were returned for these queries.");
     return buildResponse({
@@ -649,7 +710,7 @@ export async function discoverScholarships(
   const fetchedSet = new Set(pages.map((p) => p.url));
   for (const candidate of toFetch) {
     if (!fetchedSet.has(candidate.url)) {
-      errors.push(`Could not read ${new URL(candidate.url).hostname}`);
+      errors.push(`Could not read ${safeHostname(candidate.url)}`);
     }
   }
 
@@ -753,6 +814,7 @@ function buildResponse(args: {
   results: Scholarship[];
   key: string;
   intent: SearchIntent;
+  transientFailure?: boolean;
 }): ScholarshipSearchResponse {
   const response: ScholarshipSearchResponse = {
     results: args.results,
@@ -768,6 +830,7 @@ function buildResponse(args: {
       intent: toIntentInfo(args.intent),
       errors: args.errors.slice(0, MAX_ERRORS_REPORTED),
       fromCache: false,
+      transientFailure: args.transientFailure === true,
     } satisfies SearchMeta,
   };
 
