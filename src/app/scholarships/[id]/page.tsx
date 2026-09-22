@@ -135,7 +135,7 @@ export default function ScholarshipDetailPage() {
   if (loading || !ready) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-300 border-t-gray-900" />
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-300 border-t-primary" />
       </div>
     );
   }
@@ -186,7 +186,7 @@ export default function ScholarshipDetailPage() {
             {official && (
               <span
                 title="Verified against the authoritative official source"
-                className="inline-flex items-center gap-1 rounded-full bg-gray-900 px-2.5 py-0.5 text-[11px] font-semibold tracking-tight text-white"
+                className="inline-flex items-center gap-1 rounded-full bg-primary-deep px-2.5 py-0.5 text-[11px] font-semibold tracking-tight text-white shadow-chip"
               >
                 <Check className="h-3 w-3" />
                 Official
@@ -254,7 +254,7 @@ export default function ScholarshipDetailPage() {
               href={officialUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gray-900/15 bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-gray-800"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-primary-deep/20 bg-primary-deep px-5 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_8px_16px_-12px_rgba(62,110,146,0.6)] transition-all hover:-translate-y-0.5 hover:bg-primary-ink"
             >
               Open Official Website
               <ExternalLink className="h-4 w-4" />

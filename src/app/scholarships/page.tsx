@@ -177,7 +177,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none transition-colors focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
+        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none transition-all focus:border-primary focus:ring-[3px] focus:ring-primary/15"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -431,14 +431,14 @@ export default function ScholarshipsPage() {
                   if (e.key === "Enter") submit();
                 }}
                 placeholder="Search by field, scholarship name, university, or country..."
-                className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-3 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
+                className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-3 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-[3px] focus:ring-primary/15"
               />
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <button
                 onClick={submit}
                 disabled={loading || !hasCriteria}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_18px_-12px_rgba(0,0,0,0.5)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-gray-800 hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_14px_24px_-12px_rgba(0,0,0,0.45)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-deep px-6 py-3 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(36,60,76,0.4),0_10px_18px_-12px_rgba(62,110,146,0.55)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-ink hover:shadow-[0_1px_2px_rgba(36,60,76,0.4),0_14px_24px_-12px_rgba(62,110,146,0.5)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
                 {loading && <RefreshCw className="h-4 w-4 animate-spin" />}
                 {loading ? "Searching" : "Search"}
@@ -635,11 +635,15 @@ export default function ScholarshipsPage() {
         ) : neverSearched ? (
           /* Calm prompt state — nothing searched yet */
           <div className="mt-24 flex flex-col items-center text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-400 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-24px_rgba(0,0,0,0.2)]">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary-tint text-primary-ink shadow-chip">
               <Search className="h-5 w-5" />
             </span>
             <p className="mt-4 text-[13px] text-gray-400">
               Verified scholarships from official sources.
+            </p>
+            <p className="mt-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              Ready when you are
             </p>
           </div>
         ) : searchedWithNoResults ? (

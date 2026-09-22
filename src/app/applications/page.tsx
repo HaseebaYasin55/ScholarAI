@@ -181,7 +181,7 @@ function ApplicationCard() {
                         : app.program}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white">
+                  <span className="shrink-0 rounded-full border border-primary/25 bg-primary-tint px-3 py-1 text-[11px] font-semibold text-primary-ink">
                     In My Applications
                   </span>
                 </div>
@@ -200,7 +200,7 @@ function ApplicationCard() {
                       onChange={(e) =>
                         changeStatus(e.target.value as ApplicationStatus)
                       }
-                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-gray-900 focus:border-gray-400 focus:outline-none"
+                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-gray-900 focus:border-primary focus:ring-[3px] focus:ring-primary/15 focus:outline-none"
                     >
                       {APPLICATION_STATUSES.map((s) => (
                         <option key={s} value={s}>
@@ -220,7 +220,7 @@ function ApplicationCard() {
                   <div className="flex items-center gap-3">
                     <div className="h-1.5 flex-1 rounded-full bg-gray-100">
                       <div
-                        className="h-full rounded-full bg-gray-900"
+                        className="h-full rounded-full bg-primary-deep"
                         style={{ width: `${app.progress}%` }}
                       />
                     </div>

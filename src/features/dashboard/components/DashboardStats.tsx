@@ -9,8 +9,6 @@ import { isCompletedStatus } from '../../application-tracking/status';
 // read as slightly raised without any gradient or glow.
 const CARD_ELEVATION =
   'shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_26px_-20px_rgba(0,0,0,0.25)]';
-const CARD_ELEVATION_HOVER =
-  'hover:shadow-[0_2px_4px_rgba(0,0,0,0.05),0_18px_36px_-22px_rgba(0,0,0,0.35)]';
 
 export default function DashboardStats() {
   const { applications } = useAppStore();
@@ -38,9 +36,9 @@ export default function DashboardStats() {
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className={`flex items-center gap-3.5 rounded-2xl border border-gray-200 bg-white p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-gray-300 active:translate-y-0 ${CARD_ELEVATION} ${CARD_ELEVATION_HOVER}`}
+          className={`group flex items-center gap-3.5 rounded-2xl border border-gray-200 bg-white p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-card-hover active:translate-y-0 ${CARD_ELEVATION}`}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-700 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary-tint text-primary-ink shadow-chip transition-colors duration-300 group-hover:border-primary/30">
             <stat.icon className="h-4 w-4" />
           </span>
           <div className="min-w-0">

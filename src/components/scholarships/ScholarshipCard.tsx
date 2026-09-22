@@ -53,16 +53,16 @@ export default function ScholarshipCard({
   const actionLabel =
     cta === "scholarship" ? "View scholarship" : "View Official Scholarship";
   const actionClass =
-    "flex w-full items-center justify-between rounded-xl border border-gray-900/15 bg-gray-50 px-4 py-2.5 text-[13px] font-semibold text-gray-900 transition-colors hover:bg-gray-100";
+    "flex w-full items-center justify-between rounded-xl border border-primary/20 bg-primary-tint/60 px-4 py-2.5 text-[13px] font-semibold text-primary-ink transition-colors hover:bg-primary/15 hover:border-primary/30";
   const official = isOfficialApproved(scholarship);
   const status = scholarshipStatus(scholarship);
   const dl = deadlineLine(scholarship);
   const tags = cardTags(scholarship);
 
   return (
-    <article className="group flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_-28px_rgba(0,0,0,0.4)]">
+    <article className="group flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-card transition-[box-shadow,transform] duration-250 ease-out hover:-translate-y-1 hover:border-gray-300/80 hover:shadow-card-hover">
       <Link href={link} className="focus:outline-none">
-        <h4 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight text-gray-900 decoration-gray-300 underline-offset-2 group-hover:underline">
+        <h4 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight text-gray-900 decoration-primary/40 underline-offset-2 group-hover:underline">
           {name}
         </h4>
       </Link>
@@ -76,16 +76,16 @@ export default function ScholarshipCard({
           {official && (
             <span
               title="This scholarship was verified against its authoritative official source, current at last check"
-              className="inline-flex items-center gap-1 rounded-full border border-gray-900/15 bg-gray-900 px-2.5 py-1 text-[11px] font-semibold tracking-tight text-white"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary-tint px-2.5 py-1 text-[11px] font-semibold tracking-tight text-primary-ink"
             >
-              <Check className="h-3 w-3" />
+              <Check className="h-3 w-3 text-primary" />
               Official
             </span>
           )}
           {typeof match?.score === "number" && (
             <span
               title={`Match score: ${match.score}%`}
-              className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold tabular-nums tracking-tight text-gray-900"
+              className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold tabular-nums tracking-tight text-gray-900 shadow-chip"
             >
               {match.score}% match
             </span>
@@ -116,7 +116,7 @@ export default function ScholarshipCard({
           {tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600"
+              className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600 transition-colors group-hover:border-primary/20 group-hover:bg-primary-tint/40 group-hover:text-primary-ink"
             >
               {tag}
             </span>

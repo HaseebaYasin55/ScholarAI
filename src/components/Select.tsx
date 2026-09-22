@@ -129,7 +129,7 @@ export default function Select({
         aria-expanded={open}
         aria-controls={listboxId}
         aria-label={ariaLabel}
-        className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-left text-sm outline-none transition-colors focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+        className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-left text-sm outline-none transition-all focus:border-primary focus:ring-[3px] focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
       >
         <span className={`truncate ${selected ? "text-gray-800" : "text-gray-400"}`}>
           {selected ? selected.label : placeholder}
@@ -147,7 +147,7 @@ export default function Select({
           id={listboxId}
           role="listbox"
           aria-label={ariaLabel}
-          className="absolute left-0 right-0 z-30 mt-1.5 max-h-64 overflow-auto rounded-xl border border-gray-200 bg-white p-1.5 shadow-[0_18px_44px_-20px_rgba(0,0,0,0.35)]"
+          className="absolute left-0 right-0 z-30 mt-1.5 max-h-64 overflow-auto rounded-xl border border-gray-200 bg-white p-1.5 shadow-pop"
         >
           {options.map((option, index) => {
             const isSelected = option.value === value;
@@ -163,12 +163,12 @@ export default function Select({
                   choose(option);
                 }}
                 className={`flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                  isActive ? "bg-gray-50" : ""
+                  isActive ? "bg-primary/5" : ""
                 } ${isSelected ? "font-semibold text-gray-900" : "text-gray-700"}`}
               >
                 <span className="min-w-0 break-words">{option.label}</span>
                 {isSelected && (
-                  <Check className="h-4 w-4 shrink-0 text-gray-900" />
+                  <Check className="h-4 w-4 shrink-0 text-primary" />
                 )}
               </li>
             );

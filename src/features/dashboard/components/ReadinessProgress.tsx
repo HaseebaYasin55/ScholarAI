@@ -15,14 +15,14 @@ export default function ReadinessProgress() {
   const submittedDocs = documents.filter(d => d.status === 'Submitted').length;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-8">
+    <div className="card p-6 mb-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="font-bold text-gray-900">Application Readiness</h3>
           <p className="text-sm text-gray-500">Overall progress across all your targets</p>
         </div>
-        <div className="bg-gray-100 p-2 rounded-lg">
-          <Target className="w-6 h-6 text-gray-900" />
+        <div className="bg-primary-tint border border-primary/20 p-2 rounded-lg">
+          <Target className="w-6 h-6 text-primary-ink" />
         </div>
       </div>
       <div className="flex items-center gap-6">
@@ -37,7 +37,7 @@ export default function ReadinessProgress() {
               cy="50"
             />
             <circle
-              className="text-gray-900 stroke-current"
+              className="text-primary-deep stroke-current"
               strokeWidth="10"
               strokeDasharray="251.2"
               strokeDashoffset={251.2 - (251.2 * readinessPercentage) / 100}
@@ -54,9 +54,9 @@ export default function ReadinessProgress() {
           </div>
         </div>
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+          <div className="p-3 rounded-xl bg-primary-tint/40 border border-primary/15">
             <p className="text-xs text-gray-500 mb-1">Applications</p>
-            <p className="text-sm font-semibold text-gray-900">{completedApps}/{totalApps} Submitted</p>
+            <p className="text-sm font-semibold text-primary-ink">{completedApps}/{totalApps} Submitted</p>
           </div>
           <div className="p-3 rounded-xl bg-gray-50 border border-gray-100">
             <p className="text-xs text-gray-500 mb-1">Documents</p>

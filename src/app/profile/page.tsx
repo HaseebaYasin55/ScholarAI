@@ -231,7 +231,7 @@ function Chip({ children, dark }: { children: React.ReactNode; dark?: boolean })
     <span
       className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-[12px] font-medium ${
         dark
-          ? 'border-gray-900 bg-gray-900 text-white'
+          ? 'border-primary-deep bg-primary-deep text-white'
           : 'border-gray-200 bg-white text-gray-700'
       }`}
     >
@@ -302,9 +302,9 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-2xl border border-gray-200 shadow-sm">
+    <section className="card">
       <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-white">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-deep text-white shadow-chip">
           <Icon className="h-4 w-4" />
         </span>
         <div>
@@ -326,7 +326,7 @@ function DocumentStatusBadge({ status }: { status: Document['status'] }) {
     <span
       className={`shrink-0 px-2 py-1 text-xs font-medium rounded-full border ${
         submitted
-          ? 'border-gray-900 bg-gray-900 text-white'
+          ? 'border-primary-deep bg-primary-deep text-white'
           : 'border-gray-200 bg-gray-50 text-gray-600'
       }`}
     >
@@ -404,8 +404,8 @@ function UploadTrigger({
 }) {
   return (
     <label
-      className={`inline-flex shrink-0 items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-500 transition-colors ${
-        uploading ? 'cursor-wait opacity-60' : 'cursor-pointer hover:border-gray-900 hover:text-gray-900'
+      className={`inline-flex shrink-0 items-center gap-2 rounded-xl border border-dashed border-primary/40 px-4 py-2.5 text-sm font-medium text-gray-500 transition-colors ${
+        uploading ? 'cursor-wait opacity-60' : 'cursor-pointer hover:border-primary-deep hover:bg-primary-tint/50 hover:text-primary-ink'
       }`}
       title={`Upload ${label}`}
     >
@@ -451,7 +451,7 @@ function DocSlotCard({
 }) {
   return (
     <section
-      className={`flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${
+      className={`flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border bg-white p-4 shadow-card sm:p-5 ${
         doc ? 'border-gray-200' : 'border-dashed border-gray-300'
       }`}
     >
@@ -765,7 +765,7 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-gray-300 border-t-gray-900" />
+        <div className="h-12 w-12 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
       </div>
     );
   }
@@ -804,7 +804,7 @@ export default function ProfilePage() {
 
         <div className="mx-auto max-w-4xl p-4 sm:p-8">
           {/* Profile header */}
-          <section className="mb-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <section className="mb-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card">
             <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 items-center gap-4 sm:gap-5">
                 {user?.avatar_url ? (
@@ -814,7 +814,7 @@ export default function ProfilePage() {
                     className="h-16 w-16 shrink-0 rounded-2xl object-cover sm:h-20 sm:w-20"
                   />
                 ) : (
-                  <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gray-900 text-2xl font-bold text-white sm:h-20 sm:w-20">
+                  <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-b from-gray-800 to-gray-900 text-2xl font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_14px_26px_-16px_rgba(36,60,76,0.7)] sm:h-20 sm:w-20">
                     {initialsFor(user)}
                   </span>
                 )}
@@ -847,7 +847,7 @@ export default function ProfilePage() {
                 {!isEditing ? (
                   <button
                     onClick={startEditing}
-                    className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
+                    className="inline-flex items-center gap-2 rounded-xl bg-primary-deep px-4 py-2.5 text-sm font-semibold text-white shadow-chip transition-colors hover:bg-primary-ink"
                   >
                     <PencilLine className="h-4 w-4" />
                     Edit Profile
@@ -867,7 +867,7 @@ export default function ProfilePage() {
                       type="submit"
                       form="profile-form"
                       disabled={isSaving}
-                      className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-xl bg-primary-deep px-4 py-2.5 text-sm font-semibold text-white shadow-chip transition-colors hover:bg-primary-ink disabled:opacity-50"
                     >
                       {isSaving ? (
                         <>
@@ -892,7 +892,7 @@ export default function ProfilePage() {
           )}
           {success && (
             <div className="mb-6 p-3.5 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-gray-900" />
+              <CheckCircle2 className="h-4 w-4 text-primary" />
               {success}
             </div>
           )}
@@ -1098,7 +1098,7 @@ export default function ProfilePage() {
                     </div>
                     {user?.graduation_year != null && (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[12px] font-medium text-gray-600">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-gray-900" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
                         Class of {user.graduation_year}
                       </span>
                     )}
@@ -1382,7 +1382,7 @@ export default function ProfilePage() {
               />
 
               {/* Supporting documents */}
-              <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
                   <div className="flex items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-500">

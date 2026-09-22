@@ -32,7 +32,7 @@ const STATUS_CONFIG: Record<
   Supported: {
     icon: CheckCircle2,
     label: "Supported",
-    chip: "border-gray-900 bg-gray-900 text-white",
+    chip: "border-primary-deep bg-primary-deep text-white",
   },
   "Needs verification": {
     icon: HelpCircle,
@@ -42,7 +42,7 @@ const STATUS_CONFIG: Record<
   "Potentially unsupported": {
     icon: AlertTriangle,
     label: "Potentially unsupported",
-    chip: "border-2 border-gray-900 bg-white text-gray-900",
+    chip: "border-2 border-red-300 bg-red-50/60 text-red-700",
   },
 };
 
@@ -54,7 +54,7 @@ const SUMMARY_ITEMS: {
   {
     count: "supported",
     label: "Supported",
-    chip: "border-gray-900 bg-gray-900 text-white",
+    chip: "border-primary-deep bg-primary-deep text-white",
   },
   {
     count: "needs_verification",
@@ -64,7 +64,7 @@ const SUMMARY_ITEMS: {
   {
     count: "potentially_unsupported",
     label: "Potentially unsupported",
-    chip: "border-2 border-gray-900 bg-white text-gray-900",
+    chip: "border-2 border-red-300 bg-red-50/60 text-red-700",
   },
 ];
 
@@ -102,7 +102,7 @@ export default function ClaimResult({
 
       {/* Claims list */}
       {claims.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-card">
           <p className="text-sm font-medium text-gray-900">No claims found.</p>
           <p className="mt-1 text-[13px] text-gray-400">
             Nothing obviously factual was detected in this document.
@@ -114,7 +114,7 @@ export default function ClaimResult({
             const config = STATUS_CONFIG[claim.status];
             const Icon = config.icon;
             return (
-              <div key={index} className="rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div key={index} className="rounded-xl border border-gray-200 bg-white shadow-card">
                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 py-4">
                   <p className="flex-1 text-[15px] leading-relaxed text-gray-900">
                     {claim.text}
@@ -162,7 +162,7 @@ export default function ClaimResult({
           type="button"
           onClick={onRecheck}
           disabled={isRechecking}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary-deep px-3.5 text-[13px] font-semibold text-white shadow-chip transition-colors hover:bg-primary-ink disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RotateCcw className={`h-3.5 w-3.5 ${isRechecking ? "animate-spin" : ""}`} />
           {isRechecking ? "Checking…" : "Re-check"}

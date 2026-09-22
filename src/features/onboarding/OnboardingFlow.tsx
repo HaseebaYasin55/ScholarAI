@@ -119,7 +119,7 @@ function BuildingView() {
   }, [count, TASKS.length]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_20px_50px_-30px_rgba(0,0,0,0.3)]">
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card-hover">
       <div className="border-b border-gray-100 px-6 py-8 sm:px-10">
         <p className="font-mono text-[10px] font-medium uppercase tracking-[0.24em] text-gray-400">
           Profile · Final step
@@ -138,7 +138,7 @@ function BuildingView() {
               <span
                 className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors ${
                   i < count
-                    ? "border-gray-900 bg-gray-900 text-white"
+                    ? "border-primary bg-primary text-white shadow-[0_1px_2px_rgba(62,110,146,0.4)]"
                     : i === count
                       ? "border-gray-300"
                       : "border-gray-200 text-gray-300"
@@ -147,7 +147,7 @@ function BuildingView() {
                 {i < count ? (
                   <Check className="h-3.5 w-3.5" />
                 ) : i === count ? (
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900" />
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
                 ) : null}
               </span>
               <span className={i <= count ? "text-gray-700" : "text-gray-400"}>{task}</span>
@@ -253,7 +253,7 @@ export default function OnboardingFlow() {
         {building ? (
           <BuildingView />
         ) : (
-          <div key={step} className="rise-in overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_20px_50px_-30px_rgba(0,0,0,0.3)]">
+          <div key={step} className="rise-in overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card-hover">
             <div className="border-b border-gray-100 px-6 py-5 sm:px-10">
               <Progress current={step} />
             </div>
@@ -268,8 +268,8 @@ export default function OnboardingFlow() {
                   {GUIDE[step].title}
                 </h1>
                 <p className="mt-3 text-sm leading-relaxed text-gray-500">{GUIDE[step].sub}</p>
-                <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">Why we ask</p>
+                <div className="mt-6 rounded-xl border border-primary/20 bg-primary-tint/50 p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-ink">Why we ask</p>
                   <p className="mt-1 text-[13px] leading-relaxed text-gray-600">{GUIDE[step].why}</p>
                 </div>
                 <p className="mt-5 text-xs text-gray-400">→ {GUIDE[step].next}</p>
@@ -579,7 +579,7 @@ export default function OnboardingFlow() {
                     )}
                     <button
                       type="submit"
-                      className="inline-flex items-center gap-2 rounded-xl border border-transparent bg-gray-900 px-6 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_6px_14px_rgba(0,0,0,0.25)] transition-all duration-200 hover:bg-gray-800 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_10px_20px_rgba(0,0,0,0.3)] active:translate-y-px"
+                      className="btn-primary px-6 py-2.5"
                     >
                       {step === 3 ? "Build My Profile" : "Continue"}
                       <ArrowRight className="h-4 w-4" />

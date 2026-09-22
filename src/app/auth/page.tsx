@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
-import { Mail, Lock, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowRight, Check } from "lucide-react";
+import { LogoMark } from "@/components/Logo";
 
 function GoogleIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
@@ -27,6 +28,12 @@ function GoogleIcon({ className = "h-5 w-5" }: { className?: string }) {
     </svg>
   );
 }
+
+const TRUST_POINTS = [
+  "Verified scholarships from official sources",
+  "One calm place for documents, SOPs and deadlines",
+  "Eligibility that actually matches your profile",
+];
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -64,8 +71,8 @@ export default function AuthPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-300 border-t-gray-900" />
+      <div className="min-h-screen flex items-center justify-center bg-surface">
+        <div className="animate-spin rounded-full h-11 w-11 border-2 border-gray-200 border-t-primary" />
       </div>
     );
   }
@@ -106,105 +113,170 @@ export default function AuthPage() {
     }
   };
 
+  const inputClass =
+    "w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-11 pr-4 text-sm text-gray-900 transition-all placeholder:text-gray-400 focus:border-primary focus:ring-[3px] focus:ring-primary/15 focus:outline-none";
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12 sm:px-6">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-gray-900 text-white mb-5 shadow-lg shadow-gray-900/20">
-            <span className="text-xl font-bold tracking-tight">S</span>
+    <div className="min-h-screen bg-surface lg:grid lg:grid-cols-2">
+      {/* Brand panel */}
+      <aside className="relative hidden overflow-hidden bg-gray-900 lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-24 -right-16 h-96 w-96 rounded-full bg-primary/25 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-primary/15 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:26px_26px]"
+        />
+
+        <div className="relative flex flex-col gap-8">
+          <div className="flex items-center gap-2.5 text-white">
+            <LogoMark className="h-10 w-10 rounded-xl" />
+            <span className="text-xl font-bold tracking-tight">
+              Scholar
+              <span className="text-primary-soft">AI</span>
+            </span>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-            ScholarAI
-          </h1>
-
-          <p className="mt-2 text-sm text-gray-500">
-            {isLogin
-              ? "Welcome back — sign in to your account."
-              : "Create your account to get started."}
-          </p>
+          <div>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.28em] text-gray-400">
+              Study abroad copilot
+            </p>
+            <h2 className="mt-4 max-w-md text-3xl font-semibold leading-tight tracking-tight text-white">
+              Every deadline, document and dream —{" "}
+              <span className="text-primary-soft">organized.</span>
+            </h2>
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.08)] p-8">
-          {error && (
-            <div className="mb-6 p-3.5 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
-              {error}
-            </div>
-          )}
+        <ul className="relative space-y-3">
+          {TRUST_POINTS.map((point) => (
+            <li key={point} className="flex items-start gap-3 text-[13px] text-gray-300">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/25 text-primary-soft">
+                <Check className="h-3 w-3" strokeWidth={3} />
+              </span>
+              {point}
+            </li>
+          ))}
+        </ul>
+      </aside>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-              <input
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
-                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-300 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-              />
+      {/* Form column */}
+      <div className="flex min-h-screen items-center justify-center px-5 py-12 sm:px-8">
+        <div className="w-full max-w-md">
+          <div className="mb-8 flex flex-col items-center text-center lg:hidden">
+            <div className="mb-4 flex items-center gap-2.5">
+              <LogoMark className="h-10 w-10 rounded-xl" />
+              <span className="text-xl font-bold tracking-tight text-gray-900">
+                Scholar
+                <span className="text-primary">AI</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <div className="mb-6 hidden items-center justify-center lg:flex">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_12px_24px_-14px_rgba(36,60,76,0.7)] ring-1 ring-white/10">
+                <LogoMark className="h-9 w-9 rounded-xl" />
+              </span>
             </div>
 
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-              <input
-                type="password"
-                required
-                autoComplete={isLogin ? "current-password" : "new-password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-300 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-              />
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-[2.15rem]">
+              {isLogin ? "Welcome back." : "Start your journey."}
+            </h1>
+
+            <p className="mt-2 text-sm text-gray-500">
+              {isLogin
+                ? "Sign in to pick up where you left off."
+                : "Create your account — it's free and takes a minute."}
+            </p>
+          </div>
+
+          <div className="card mt-8 p-7 shadow-card sm:p-8">
+            {error && (
+              <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="password"
+                  required
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className={inputClass}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="btn-primary w-full px-4 py-3 text-[15px]"
+              >
+                {isLoading ? (
+                  <span className="inline-block h-5 w-5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                ) : (
+                  <>
+                    {isLogin ? "Sign In" : "Create Account"}
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="my-7 flex items-center gap-4">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs font-medium uppercase tracking-widest text-gray-400">
+                or
+              </span>
+              <div className="h-px flex-1 bg-gray-200" />
             </div>
 
             <button
-              type="submit"
+              type="button"
+              onClick={handleGoogleSignIn}
               disabled={isLoading}
-              className="w-full py-3 px-4 bg-gray-900 text-white font-semibold rounded-xl shadow-[0_4px_14px_rgba(0,0,0,0.25)] hover:bg-gray-800 hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(0,0,0,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(0,0,0,0.2)] disabled:opacity-60 disabled:pointer-events-none transition-all duration-200 flex items-center justify-center gap-2"
+              className="btn-secondary w-full px-4 py-3 text-sm"
             >
-              {isLoading ? (
-                <span className="inline-block h-5 w-5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-              ) : (
-                <>
-                  {isLogin ? "Sign In" : "Create Account"}
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
+              <GoogleIcon className="h-5 w-5" />
+              <span>Continue with Google</span>
             </button>
-          </form>
-
-          <div className="flex items-center gap-4 my-7">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs font-medium uppercase tracking-widest text-gray-400">
-              or
-            </span>
-            <div className="flex-1 h-px bg-gray-200" />
           </div>
 
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isLoading}
-            className="w-full py-3 px-4 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.08),0_2px_8px_rgba(0,0,0,0.06)] hover:bg-gray-50 hover:border-gray-400 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(0,0,0,0.1),0_6px_16px_rgba(0,0,0,0.1)] active:translate-y-0 active:shadow-[0_1px_2px_rgba(0,0,0,0.08)] disabled:opacity-60 disabled:pointer-events-none transition-all duration-200 flex items-center justify-center gap-3"
-          >
-            <GoogleIcon className="h-5 w-5" />
-            <span>Continue with Google</span>
-          </button>
-        </div>
-
-        <div className="text-center mt-6">
-          <button
-            type="button"
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError("");
-            }}
-            className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-          </button>
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError("");
+              }}
+              className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900"
+            >
+              {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

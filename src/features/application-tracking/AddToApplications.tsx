@@ -66,7 +66,7 @@ export default function AddToApplications({
       <div className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-deep text-white shadow-chip">
               <Check className="h-4 w-4" />
             </span>
             <div>
@@ -88,7 +88,7 @@ export default function AddToApplications({
           </div>
           <Link
             href="/applications"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary-deep px-4 py-2.5 text-sm font-semibold text-white shadow-chip transition-colors hover:bg-primary-ink"
           >
             View in My Scholarships
             <ArrowRight className="h-3.5 w-3.5" />
@@ -113,7 +113,7 @@ export default function AddToApplications({
         <button
           onClick={handleAdd}
           disabled={adding}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_6px_14px_rgba(0,0,0,0.25)] transition-all hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary-deep px-6 py-3 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_6px_14px_rgba(36,60,76,0.3)] transition-all hover:-translate-y-0.5 hover:bg-primary-ink disabled:cursor-wait disabled:opacity-60"
         >
           {adding ? (
             <Loader2 className="h-4 w-4 animate-spin" />

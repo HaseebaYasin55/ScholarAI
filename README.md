@@ -2,476 +2,451 @@
 
 **Scholarship discovery, SOP generation, and application tracking in one workspace.**
 
-ScholarAI is a full-stack study-abroad assistant that searches the open web for
-real scholarships, verifies them against official sources, and guides you from
-"interesting opportunity" to "application submitted" — with an AI-written
-Statement of Purpose, a document checklist, and deadline reminders along the way.
+ScholarAI is a full-stack study-abroad assistant. It searches the open web for real, currently-open scholarships — always pointing back to official university and scholarship pages — extracts structured eligibility and deadline data with AI, and walks you through each application from choosing a program to submitting it, with a Statement of Purpose (SOP) generator and a claim checker to keep your materials honest.
 
-Built with **Next.js (App Router)**, **TypeScript**, **Tailwind CSS**, **Supabase**,
-**Groq / Gemini LLMs**, and **Resend**. Everything runs with an intentionally
-monochrome, low-noise interface.
-
-```
-Next.js 16 · React 19 · TypeScript 5 · Tailwind CSS 4 · Supabase · Zustand · Groq AI · Gemini · Resend
-```
+**Visit the app:** `https://scholarai.local`
 
 ---
 
-## Table of contents
+## Table of Contents
 
-- [Why it exists](#why-it-exists)
-- [Features](#features)
-- [How scholarship discovery works](#how-scholarship-discovery-works)
-- [The application journey](#the-application-journey)
-- [AI architecture](#ai-architecture)
-- [Tech stack](#tech-stack)
-- [Database architecture](#database-architecture)
-- [API surface](#api-surface)
-- [Project structure](#project-structure)
-- [Environment variables](#environment-variables)
-- [Getting started](#getting-started)
-- [Scripts](#scripts)
-- [Quality & validation](#quality--validation)
-- [Design principles](#design-principles)
-- [Current status & known limits](#current-status--known-limits)
-- [Future improvements](#future-improvements)
-
----
-
-## Why it exists
-
-Finding scholarships is genuinely broken:
-
-- Opportunities are scattered across thousands of university and government
-  pages — there is no single, trustworthy index.
-- Aggregator sites are noisy, often stale, and rarely link back to the
-  authoritative source.
-- Even once you find a scholarship, the real work — eligibility checks,
-  documents, a Statement of Purpose, deadlines — is uncoordinated and
-  spreadsheet-driven.
-
-ScholarAI treats **official sources as the only source of truth**. It does not
-curate scholarship listings by hand and it does not scrape aggregators. Instead,
-it runs a live discovery pipeline that finds official pages, reads them, and
-turns the results into a tracked, step-by-step application workspace.
+- [Problem Statement](#problem-statement)
+- [Key Features](#key-features)
+- [End-to-End User Flow](#end-to-end-user-flow)
+- [Scholarship Discovery Architecture](#scholarship-discovery-architecture)
+  - [Tavily Search + Official-Source Filtering](#tavily-search--official-source-filtering)
+  - [Cheerio Web Scraping](#cheerio-web-scraping)
+  - [Groq AI Extraction](#groq-ai-extraction)
+  - [Deadline & Program/Course Extraction](#deadline--programcourse-extraction)
+- [Application Preparation Journey](#application-preparation-journey)
+- [Document Tracking](#document-tracking)
+- [SOP Generator + Saved SOPs](#sop-generator--saved-sops)
+- [Profile & Onboarding](#profile--onboarding)
+- [Claim Checker](#claim-checker)
+- [Supabase Auth + PostgreSQL Architecture](#supabase-auth--postgresql-architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Environment Variables](#environment-variables)
+- [Local Setup](#local-setup)
+- [Run & Build Commands](#run--build-commands)
+- [Main Routes & Modules](#main-routes--modules)
+- [Security Considerations](#security-considerations)
+- [Current Project Status](#current-project-status)
+- [Future Improvements](#future-improvements)
 
 ---
 
-## Features
+## Problem Statement
 
-### 1. Scholarship discovery (live web search)
+Applying for a scholarship abroad is fragmented across dozens of university sites. Students must:
 
-- Natural-language search over the open web — no manual catalog to maintain.
-- Filters for country, degree level, field, funding type, and scholarship type.
-- **Official-source verification**: results are cross-checked against the
-  authoritative page; aggregators, blogs, and SEO content are rejected.
-- Live results are ranked by a status-aware sort (open → deadline passed → …)
-  and cached in memory for 30 minutes to keep repeat searches fast.
-- Every result carries its source page, last-updated timestamp, and a clear
-  "Official" badge when the source has been verified.
+- Discover which scholarships actually match their profile (country, degree level, field, funding).
+- Trust that the information they read is real — not SEO bait from aggregators.
+- Track deadlines, eligibility, required documents, and application status per university.
+- Write a distinct, honest Statement of Purpose for each program.
+- Make sure every claim in their materials is supported by evidence.
 
-### 2. Official-source gate
-
-A scholarship is only "official" if its URL clears a multi-layer gate:
-
-- Aggregator / news / blog host blocklists.
-- A trust model for known university and government domains.
-- A verification verdict on the fetched page (fail-closed — no verdict means
-  "not official").
-- Persisted catalog rows must also pass the gate at read time; anything stale
-  or unverifiable is treated as not found rather than shown with confidence.
-
-### 3. Scholarship detail page
-
-Each result gets a full profile: deadline banner with days-remaining urgency
-pill, documents required, IELTS / English requirement, source freshness, a
-verified "Open Official Website" link, and an **"Add to my applications"** action.
-
-A transparent **Profile Match** panel scores fit against your onboarding profile
-and lists exactly what is missing (e.g. "IELTS band required", "Transcript not
-uploaded") — with a disclaimer that it is an estimate, never an eligibility
-decision.
-
-### 4. Application journey
-
-Every tracked application gets a guided, five-step preparation flow, with each
-change persisted to Supabase:
-
-1. **Requirements** — parse the scholarship's requirements into categories
-   (CV, transcript, SOP, degree, recommendation, English, other) and mark each
-   ready / missing / confirm.
-2. **Program & link** — pick the specific program you are applying to; the app
-   re-reads the scholarship's official page to offer real program options when
-   available.
-3. **Documents** — upload and match your documents to the requirements.
-4. **SOP** — draft your Statement of Purpose (see below).
-5. **Submit** — record the official application link and move your status along
-   a clear workflow.
-
-Statuses are self-managed: `Interested → Preparing → Applied → Under Review →
-Interview → Accepted → Rejected`, with legacy values mapped in.
-
-### 5. AI Statement of Purpose (SOP) generator
-
-- **Generate**: draft a full SOP from your profile.
-- **Improve**: upgrade an existing draft in place.
-- Export as a **.docx** file (generated purely in the browser — no server or
-  third-party document library).
-- Handoff with your application's context so the SOP matches the scholarship
-  you are actually applying to.
-
-### 6. Claim checker
-
-Paste your SOP and the app evaluates each factual claim (funding amounts,
-eligibility, commitments) and flags it as:
-
-- **Supported** — consistent with the requirements
-- **Needs verification** — no evidence found, verify before submitting
-- **Potentially unsupported** — looks inconsistent
-
-Claims that cannot be checked are never assumed safe.
-
-### 7. Document requirements matching
-
-A requirements parser maps free-text scholarship requirements to your uploaded
-documents using synonym-aware matching (`transcript` ↔ "academic record",
-etc.). Matching is intentionally conservative — it only claims a match it can
-defend, otherwise it asks you to confirm.
-
-### 8. Deadline & email alerts
-
-A scheduled endpoint (protected by `CRON_SECRET`) evaluates your tracked
-applications and sends branded emails through **Resend**:
-
-- **Deadline alerts** for applications due within the next 7 days.
-- Document and profile-completion reminders.
-
-Notification preferences are per-user, with all reminders enabled by default
-until you opt out.
-
-### 9. Onboarding & profile
-
-A consultant-style, four-step onboarding collects your background and
-preferences:
-
-1. About you — name, contact, current country / city.
-2. Education — level, field of study, university, graduation year, GPA / scale.
-3. Goals — interests, funding preference, destinations, degree level.
-4. Final preferences — budget / tuition, IELTS status & band, intake, fee
-   waivers, multi-country openness.
-
-Everything entered here can be revisited and edited later from `/profile`.
-
-### 10. Auth
-
-Email/password or Google OAuth via Supabase Auth, with a session-refresh proxy
-middleware, a fire-and-forget profile upsert on sign-in, and gated routing
-(`onboarded_at` is the single source of truth — you cannot skip onboarding via a
-deep link).
+ScholarAI replaces this scattered workflow with a single workspace: **discovery grounded in official sources**, **an AI-ordered preparation journey per application**, and **tools that help you write and verify your application materials**.
 
 ---
 
-## How scholarship discovery works
+## Key Features
 
-The pipeline runs server-side on every search (`POST /api/scholarships/search`),
-needs no API key for web search, and spends a single LLM call per batch.
-
-```
-User query
-   │
-   ▼
-Intent classification (heuristic, offline — no LLM)
-   │
-   ▼
-Parallel web search (Tavily Search API)
-   │
-   ▼
-Aggregate results → hard-prune non-official sources
-   (host blocklist · trust model · generic-name filter)
-   │
-   ▼
-Fetch official candidate pages (bounded concurrency, per-request timeout)
-   │
-   ▼
-Local scholarship-signal filter (keyword heuristics, no LLM)
-   → keep at most 8 official pages
-   │
-   ▼
-ONE bounded Groq LLM batch → strict-JSON extraction
-   │
-   ▼
-Official-domain verification → current status / deadline derivation
-   │
-   ▼
-Status-priority sort → in-memory cache (30 min TTL) → response
-```
-
-Design decisions that keep it honest:
-
-- **LLM used only where it earns its place.** Intent classification, source
-  pruning, and the scholarship-signal filter are deterministic heuristics. The
-  LLM is used for structured extraction (one strict-JSON batch) and is
-  fallback-safe: if Groq is unavailable, the app falls back to the page's own
-  metadata rather than stopping the search.
-- **Aggregators are never trusted.** Scholarship-on-aggregator matches are
-  pruned regardless of perceived quality.
-- **Fail-closed verification.** A page without a positive official verdict is
-  treated as not official.
-
----
-
-## The application journey
-
-```
-Landing page
-   │
-   ▼
- /auth — Google OAuth or email/password
-   │
-   ▼
- /onboarding — 4-step profile + preferences (onboarded_at gate)
-   │
-   ▼
- /dashboard — stats, recent applications, quick actions
-   │
-   ├── /scholarships — live discovery + filters
-   │       └── /scholarships/[id] — verify, match score, "Add to applications"
-   │
-   ├── /applications — tracked applications by status
-   │       └── /applications/[id] — 5-step journey
-   │
-   ├── /sop-generator — SOP → .docx → /claim-checker
-   │
-   └── /profile — edit profile & preferences
-```
-
----
-
-## AI architecture
-
-- **Groq** is the primary LLM provider
-  (`openai/gpt-oss-120b` over the OpenAI-compatible endpoint). All calls go
-  through a single strict-JSON helper that pins to the requested shape, retries
-  on rate limits, and never emits prose.
-- **Gemini** (`gemini-2.5-flash`) is the SOP-generation fallback if Groq is
-  unavailable.
-- Provider keys live only server-side in API routes; the browser never touches
-  a provider secret.
-
-| Task | Provider choice | Failure behaviour |
-| --- | --- | --- |
-| Scholarship extraction (strict JSON) | Groq (single bounded batch) | Fall back to page metadata |
-| SOP generate / improve | Groq → Gemini fallback | Surface a clean error, keep the draft |
-| Claim checking | Groq (strict JSON) | Unknown claims default to "needs verification" |
-
----
-
-## Tech stack
-
-| Layer | Technology |
+| Feature | Description |
 | --- | --- |
-| Framework | Next.js 16.3.4 (App Router, Turbopack) |
-| UI | React 19.2.8, TypeScript 5 |
-| Styling | Tailwind CSS 4, lucide-react icons, Geist fonts |
-| State | Zustand 5 (client stores) |
-| Database & Auth | Supabase (`@supabase/ssr` 0.12.7, `@supabase/supabase-js` 2.116.0) |
-| AI | Groq (`openai/gpt-oss-120b`) + Gemini (`gemini-2.5-flash`) via HTTP |
-| Email | Resend |
-| Documents | Pure client-side `.docx` writer (no third-party doc library) |
+| **Verified Scholarship Search** | Finds live scholarships on the open web via Tavily, then filters to official university/authority pages. Never surfaces aggregators or invented entries. |
+| **AI Structured Extraction** | Groq parses each official page into a clean, typed scholarship record — deadline, funding, eligibility, required documents, programs, IELTS requirements, and more. Unknown values stay `null` ("Not specified") instead of guessing. |
+| **Country-Based Relevance** | Search follows your citizenship and preferred destinations: degree level and funding filters, country affinity, and an open-to-all-disciplines check. |
+| **Application Tracking** | Track any scholarship through `Interested → Preparing → Applied → Under Review → Interview → Accepted` with a per-application snapshot of deadlines and required documents. |
+| **Application Preparation Journey** | A guided 6-step checklist per scholarship: choose program, review official requirements, confirm review, upload documents, generate an SOP, submit the official application. |
+| **Document Tracking** | Upload CVs, transcripts, SOPs and degree certificates (PDF/DOC/DOCX) to your private Supabase storage; the journey auto-classifies requirements as ready/missing. |
+| **SOP Generator** | Generates and improves personalized statements of purpose from your profile and the program's official requirements — with saved drafts linked to applications. |
+| **Saved SOPs** | Every generated SOP is saved and linked to its application, so you can iterate across drafts. |
+| **Claim Checker** | Audits individual claims or a full SOP against your profile and supporting documents; flags anything unsupported or potentially fabricated with suggestions on how to fix it. |
+| **Readiness Dashboard** | A percentage-based readiness score per application with the concrete missing items blocking submission. |
+| **Profile & Onboarding** | One-time onboarding captures education, GPA, IELTS, interests, destinations, and funding preferences; the profile auto-fills SOP generation and claim checking. |
 
 ---
 
-## Database architecture
+## End-to-End User Flow
 
-All schema lives in versioned migrations under `supabase/migrations/`.
+```
+Sign up / Sign in ─► Onboarding ─► Dashboard ─► Discover scholarships
+   (Supabase Auth)   (profile +      (readiness,       (Tavily → official pages)
+                      preferences)     stats, recs)
+                                           │
+                                           ▼
+                            Scholarship detail (verified facts, Official badge)
+                                           │
+                              Add to applications (snapshot row created)
+                                           │
+                                           ▼
+                    Application Preparation Journey (/applications/:id)
+         ┌───────────┬───────────┬──────────────┬─────────────┬──────────────┐
+         ▼           ▼           ▼              ▼             ▼              ▼
+    1. Choose    2. Review   3. Confirm    4. Upload     5. Generate     6. Mark
+       program    official     review       documents      SOP           applied
+       (dropbox)  requirements               (storage)     (Groq/Gemini)
+         └───────────┴───────────┴──────────────┴─────────────┴──────────────┘
+                                           │
+                                           ▼
+                        Claim Checker (verify SOP claims ← profile)
+                                           │
+                                           ▼
+                       Apply on the official website → status updates
+```
 
-| Table | Purpose |
+1. **Authentication** — Email/password or Google OAuth via Supabase Auth.
+2. **Onboarding** — Answer a few questions; this builds the profile used everywhere else.
+3. **Dashboard** — See readiness across tracked applications, stats, and recommendations.
+4. **Scholarship search** — Search by name, country, degree, field, or funding. Results are organized with country-based relevance and only official sources.
+5. **Scholarship detail** — Read the extracted facts (deadline, funding, eligibility, required documents) with a **_Verified · Official_ badge** on rows confirmed against the authoritative source, plus a link to the official page.
+6. **Track it** — "Add to applications" creates a snapshot row (`applications`) for that scholarship.
+7. **Preparation journey** — Complete the 6 steps; every signal (program chosen, requirements reviewed, documents uploaded, SOP created, applied) updates the readiness score.
+8. **Claim Checker** — Paste a claim or your whole SOP; get a strength score and per-claim verdicts against your profile.
+9. **Submit** — "Apply on the official website" opens the verified official URL; mark the application Submitted/Applied to advance the tracker.
+
+---
+
+## Scholarship Discovery Architecture
+
+```
+  Intent (heuristic)
+        │
+        ▼
+  3–4 parallel Tavily searches
+   (name / country+field+degree / funding+eligibility)
+        │
+        ▼
+  Aggregate + OFFICIAL-domain-preference prune
+   (blocked: aggregators, news, blogs, SEO, social)
+        │
+        ▼
+  Fetch ~10 candidate pages in parallel
+   (bounded concurrency, per-request timeout,
+   respects robots.txt, 1.6 MB page cap)
+        │
+        ▼
+  Local scholarship-signal filter
+        │
+        ▼
+  Pick ≤ 8 official pages
+        │
+        ▼
+  ONE bounded Groq batch extraction
+   (deadline / funding / eligibility / programs)
+        │
+        ▼
+  Status & deadline read from the official page
+   → status-priority assembly
+        │
+        ▼
+  30-min in-memory cache (optional DB persistence)
+```
+
+The pipeline lives in `src/lib/scholarship/` and is orchestrated by `search.ts`.
+
+### Tavily Search + Official-Source Filtering
+
+- Queries are shaped by an **intent heuristic** (`intent.ts`) that understands named scholarships (with safe spelling correction, e.g. "Fullbright" → "Fulbright"), countries, degree levels, funding types, and whether the opportunity must currently be open.
+- **Tavily** (`web-search.ts`) is the search/discovery layer; 3–4 searches run in parallel and the results are merged.
+- Results are then **pruned toward official domains** by `web.ts`: social media, aggregators, news, blogs, and SEO sites are blocked, so candidates are overwhelmingly university and authority domains.
+- An **LLM-assisted verifier** (`verify.ts`) confirms authenticity and is **fail-closed** — a page that does not clearly pass both the deterministic trust gate (institutional domain + on-page scholarship signal → `domainTrust`) and the verification step is not surfaced as verified. A small `TRUSTED_ORGS` allowlist (e.g. `daad.de`, `fulbright.org`) covers authoritative non-`.edu` sources.
+- The UI only ever shows an **"Official" badge** (and an official "Apply" link) for rows that cleared this gate (`verifiedOfficialUrl` / `isOfficialApproved` in `scholarshipApps.ts`). Verified results are marked in the database with `source_verified_at`.
+
+### Cheerio Web Scraping
+
+- `web.ts` fetches each candidate page with **Cheerio**, honoring `robots.txt` (`robotsAllow`), using a transparent ScholarAI user agent, capping pages at ~**1.6 MB**, and enforcing short per-request timeouts.
+- It **never bypasses CAPTCHAs or paywalls**, and only ever reads public pages.
+- The same scraper powers the **program-options** endpoint, which re-reads a tracked application's own official page to return the concrete programs/fields the page actually states.
+
+### Groq AI Extraction
+
+- `extract.ts` sends a **single bounded batch** to **Groq** (`groq.ts`, model `openai/gpt-oss-120b` via the OpenAI-compatible endpoint, with retry and rate-limit handling) to extract a strictly-validated, normalized scholarship record.
+- The extractor **never invents information** — an absent value is kept `null` and rendered as "Not specified" in the UI.
+- Extraction covers: name, university, country, degree levels, fields, funding type, tuition coverage, stipend, accommodation, travel allowance, health insurance, application fee, eligibility, required documents, IELTS requirement, opening date, deadline, cycle, application status, official URLs, eligible nationalities, and nationality restrictions.
+
+### Deadline & Program/Course Extraction
+
+- **Deadline** comes from the official page and drives status ordering (open / closing soon / closed) and the application tracker's calendar.
+- **Programs & courses** ("fields") are extracted per scholarship and used to populate the journey's program dropdown (Step 1). When the official page lists no concrete programs, the UI falls back to a manual entry field.
+- **Country-based relevance** mixes your citizenship/destinations with degree level and funding filters; additionally `openToAllDisciplines` flags scholarships that accept every field.
+
+---
+
+## Application Preparation Journey
+
+For every tracked scholarship, `/applications/[id]` (`ApplicationJourney.tsx` + `journey.ts`) presents a 6-step checklist:
+
+1. **Chosen program** — select from the official page's programs (via the program-options endpoint) or enter it manually.
+2. **Official requirements** — deadline, IELTS requirement, eligibility, and required documents, loaded from the verified extraction.
+3. **Requirements reviewed** — confirm you read them.
+4. **Documents** — upload the required documents; the step turns green only when every required item has an upload.
+5. **SOP** — generate or improve a Statement of Purpose for that university/program; the saved SOP links to the application.
+6. **Deadline & submission** — the tracker's final step; once complete you mark the application as applied.
+
+Every signal is derived from data that is already persisted, so the journey is always in sync:
+
+- Chosen program → `applications.program`
+- SOP step → `sops.application_id`
+- Documents ready → `documents` (namespaced by university)
+- Applied → `applications.status`
+- Requirements reviewed → `applications.requirements_reviewed` (the only journey-only column, added in migration 014)
+
+`readiness.ts` (`computeApplicationReadiness`) turns these into a percentage and a list of missing items; the dashboard and detail page render the same numbers.
+
+---
+
+## Document Tracking
+
+- Uploads go to a **private, RLS-scoped `documents` storage bucket** (`documents` ↔ user id prefix), accepting PDF, DOC, and DOCX up to 5 MB (migration 008).
+- The `documents` table stores name, university, status, and deadline per file.
+- `documents.ts` classifies each requirement by type (CV, transcript, SOP, degree, recommendation, English proof, other) with synonym-aware matching (`docMeets`).
+- **"Ready" is assigned conservatively** — only when a real upload exists; everything else is `missing` or needs confirmation.
+
+---
+
+## SOP Generator + Saved SOPs
+
+- Three places surface the generator: the dedicated `/sop-generator` page, the preparation journey (Step 5), and the scholarship detail page (via a session-storage prefill handoff, `SOP_PREFILL_KEY`).
+- The API (`/api/generate-sop`) has two modes:
+  - **generate** — writes a fresh SOP from your profile facts and the program's official requirements.
+  - **improve** — refines an existing draft while preserving every factual claim.
+- A hard rule: **only the student's own profile facts may be used; the model never invents achievements, metrics, grades, projects, or university statistics.** Official requirements (pasted from the university site) are followed exactly.
+- Every generated SOP is saved to the `sops` table and linked to its application, so you can iterate and revisit drafts.
+
+---
+
+## Profile & Onboarding
+
+- A one-time onboarding flow (`/onboarding`) collects first/last name, location, education level, degree, university, graduation year, GPA and scale, IELTS status/band, interests, preferred field, study destinations, degree levels, and funding preferences.
+- Saved to `profiles` (extended in migration 006) and `preferences` (array columns that grow without schema changes).
+- The same profile powers dashboard recommendations, SOP generation, and claim checking; `useRequireOnboarding` routes users to `/onboarding` until it is complete.
+
+---
+
+## Claim Checker
+
+The `/claim-checker` page and `/api/check-claims` endpoint audit your application materials in two modes:
+
+- **Single claim** — paste one claim (e.g. "Led a 12-person team"); you get a strength score (0–100), a verdict (**Strong / Needs Evidence / Weak / Contradictory**), analysis, and 2–3 concrete suggestions for improving it.
+- **Document mode** — paste your full SOP; the model extracts every factual claim and classifies each as **Supported / Needs verification / Potentially unsupported** against your profile and uploaded documents, quoting the matching evidence or saying none was found.
+
+Results are stored in the `claims` table. The checker **never invents facts or documents** — it only compares claims against what you actually provided.
+
+---
+
+## Supabase Auth + PostgreSQL Architecture
+
+ScholarAI uses a **Supabase** backend with **Supabase SSR** cookie session handling:
+
+```
+Browser ──► Next.js App Router (SSR) ──► Supabase client (anon key, RLS everywhere)
+   │                                       supabase-browser.ts / supabase-admin.ts
+   │
+   └────► API routes (server-only) ──► Tavily · Cheerio · Groq (· Gemini fallback)
+                     │
+                     └──► Supabase (service-role key, never exposed to the client)
+                              for cache persistence + admin writes
+```
+
+### Authentication & Sessions
+
+- **Email/password** sign-up/login and **Google OAuth** (`/auth`, `src/lib/auth-urls.ts`, `AuthProvider` + `authStore`).
+- Sessions are runtime client and server Supabase clients built from the configured cookies; a proxy/edge middleware layers session refresh.
+- `useRequireOnboarding` gates every page behind login → onboarding.
+
+### Database (PostgreSQL — 16 migrations in `supabase/migrations/`)
+
+| Table | Purpose | RLS |
+| --- | --- | --- |
+| `profiles` | Extended student profile (onboarding fields) | Own row only |
+| `applications` | Per-scholarship tracker rows + journey state (`requirements_reviewed`, `official_url`, `fields`, ...) | Own rows only |
+| `sops` | Saved SOP drafts linked to applications | Own rows only |
+| `claims` | Claim-checker results | Own rows only |
+| `documents` | Document outbox (name, status, deadlines) + `file_path` into storage | Own rows only |
+| `preferences` | Onboarding multi-select preferences (`text[]`) | Own row only |
+| `scholarships` | Verified scholarship catalog (read-only for clients) | Authenticated view (`SELECT` only); writes restricted to the server-side service role |
+| `deadlines` / `notifications` | Original deadline and notification outbox tables | Own rows only |
+
+- **Row-Level Security is enabled on every table**; the anon key (client) can only touch its own rows and read public catalog data, while the service-role key (server only) performs verification writes to `scholarships`.
+
+---
+
+## Tech Stack
+
+| Area | Technology |
 | --- | --- |
-| `profiles` | User identity, contact, academic background, **onboarding state** |
-| `preferences` | Discovery & matching preferences (destinations, degree levels, funding, IELTS, budget…) |
-| `applications` | Tracked applications — scholarship snapshot, status workflow, program / application link, unique per (user, scholarship) |
-| `documents` | Uploaded requirement documents |
-| `deadlines` | Application deadline tracking |
-| `sops` | Generated SOPs |
-| `claims` | Claim-checker results |
-| `scholarships` | Verified scholarship catalog (source-verified URLs, current status) |
-| `email_alerts` | Sent-alert log (prevents duplicate reminders) |
-| Storage bucket | `documents` — requirement file uploads |
-
-Migration timeline highlights:
-
-- `001`–`004` — core tables (profiles, applications, documents, deadlines; sops; claims; email alerts)
-- `005`–`006` — profile insert policy, onboarding + preferences
-- `007`–`010` — scholarship catalog schema, documents storage, preferences RLS fixes
-- `011`–`013` — application ↔ scholarship snapshot + status workflow (unique per user), scholarship source verification, tracking privileges
-- `014`–`015` — journey state (`requirements_reviewed`), application fields snapshot
-
-**Row-level security** locks the tables to `authenticated` rows — an anonymous
-client is refused read access to even the scholarships catalog.
-
-Catalog persistence note: live discovery results are always available, but
-writing them into the `scholarships` catalog currently requires a
-`SUPABASE_SERVICE_ROLE_KEY` (the planned production scraper that seeds the
-catalog is the remaining piece — see [Current status](#current-status--known-limits)).
+| Framework | [Next.js 16](https://nextjs.org/) (App Router, Turbopack, TypeScript) |
+| UI | React 19, [Tailwind CSS v4](https://tailwindcss.com/), [lucide-react](https://lucide.dev/) |
+| State | [Zustand](https://zustand-demo.pmnd.rs/) (`authStore`, `appStore`, `scholarshipResultsStore`) |
+| Backend | Next.js API Routes (server-only) |
+| Database & Auth | [Supabase](https://supabase.com/) (PostgreSQL + Auth + Storage), `@supabase/ssr` |
+| Web search | [Tavily](https://tavily.com/) |
+| Scraping | [Cheerio](https://cheerio.js.org/) |
+| LLM extraction | [Groq](https://groq.com/) (`openai/gpt-oss-120b`) + optional Gemini 2.5 Flash fallback |
+| Document parsing | Cheerio (server) + browser file readers (client) |
 
 ---
 
-## API surface
+## Project Structure
 
-| Route | Method | Purpose |
+```
+frontend/
+├─ next.config.ts                     # Next.js config
+├─ vercel.json                        # deployment metadata
+├─ .env.example                       # environment template
+├─ supabase/
+│  └─ migrations/                     # 16 SQL migrations (001→016), incl. RLS
+├─ scripts/
+│  ├─ scholarship-scraper/            # standalone scraper contracts/utilities
+│  └─ test-deadline-reminders.mjs     # route-level test helper
+└─ src/
+   ├─ app/                            # App Router pages + API routes
+   │  ├─ auth/  onboarding/  dashboard/
+   │  ├─ scholarships/  scholarships/[id]/
+   │  ├─ applications/  applications/[id]/
+   │  ├─ sop-generator/  claim-checker/  profile/
+   │  └─ api/
+   │     ├─ scholarships/search  scholarships/program-options
+   │     ├─ generate-sop  check-claims
+   │     └─ (notifications, cron)      # reserved / administrative endpoints
+   ├─ components/                     # shared UI + Logo (brand mark)
+   ├─ features/
+   │  ├─ scholarships/                # search UI, detail, AddToApplications
+   │  ├─ sop-generator/               # form, service, save logic
+   │  ├─ claim-checker/               # claim + document audit UI
+   │  ├─ application-tracking/        # tracker, journey, status helpers
+   │  └─ onboarding/                  # onboarding wizard
+   ├─ hooks/                          # useRequireOnboarding, etc.
+   ├─ lib/
+   │  ├─ supabase*.ts                 # client/admin SSR clients
+   │  └─ scholarship/                 # discovery pipeline
+   │     ├─ search.ts  intent.ts  web-search.ts  web.ts
+   │     ├─ extract.ts  verify.ts  groq.ts  cache.ts
+   │     └─ journey.ts  documents.ts  readiness.ts  status.ts ...
+   └─ store/                          # Zustand stores (auth, apps, results)
+```
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env.local` and fill in the values:
+
+| Variable | Description | Used by |
 | --- | --- | --- |
-| `/api/scholarships/search` | POST | Run the discovery pipeline (query + filters, limit clamped 1–24) |
-| `/api/scholarships/program-options` | POST | Re-read an application's official page to list eligible programs |
-| `/api/generate-sop` | POST | Generate or improve an SOP (`mode: generate \| improve`) |
-| `/api/check-claims` | POST | Evaluate factual claims in a SOP |
-| `/api/cron/send-alerts` | GET | Scheduled email alerts — **requires `?key=CRON_SECRET`** |
-| `/api/notifications/get-preferences` | GET | Per-user notification preferences (defaults when none exist) |
-| `/api/notifications/update-preferences` | POST | Upsert notification preferences |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (public) | Client + server |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public anon key | Client + server (RLS-restricted) |
+| `NEXT_PUBLIC_SITE_URL` | Canonical site URL | Auth redirects |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only admin key (never committed, never shipped to the client) | Scholarship catalog writes |
+| `GROQ_API_KEY` | Groq API key | AI extraction, SOP generation, claim checking |
+| `TAVILY_API_KEY` | Tavily search API key | Scholarship discovery |
+| `GEMINI_API_KEY` | *(optional)* Gemini 2.5 Flash fallback for SOP/claim routes | Fallback only |
 
 ---
 
-## Project structure
+## Local Setup
 
-```
-src/
-├── app/                        # App Router: pages + API routes, proxy middleware
-│   ├── page.tsx                # Landing page
-│   ├── api/                    # /generate-sop · /check-claims · /scholarships/search
-│   │                           # /scholarships/program-options · /cron/send-alerts
-│   │                           # /notifications/get-preferences · /update-preferences
-│   ├── auth/                   # Email/password + Google OAuth, callback exchange
-│   ├── dashboard/  applications/  scholarships/  profile/
-│   ├── sop-generator/  claim-checker/  onboarding/
-├── components/                 # Header, LandingPage, Select, ScholarshipCard, StatusBadge…
-├── features/
-│   ├── application-tracking/   # Journey UI, cards, status/URL helpers
-│   ├── email-alerts/           # Resend service + branded templates
-│   ├── sop-generator/          # Service, form/result components, client-side .docx writer
-│   ├── claim-checker/          # Service + handoff
-│   ├── onboarding/             # 4-step flow, data-driven option lists, types
-│   └── recommendations/        # (foundations for future recommendation modules)
-├── hooks/                      # useRequireOnboarding gate
-├── lib/
-│   ├── supabase.ts             # Server/client Supabase clients
-│   ├── scholarship/
-│   │   ├── search.ts           # Discovery pipeline orchestrator
-│   │   ├── web-search.ts       # Tavily Search API adapter (server key)
-│   │   ├── web.ts              # Host blocklists, trust model, URL utilities
-│   │   ├── verify.ts           # Official-source verification (fail-closed)
-│   │   ├── extract.ts          # LLM extraction schema + prompts
-│   │   ├── groq.ts             # Strict-JSON LLM helper (retry, code-fence stripping)
-│   │   ├── cache.ts            # In-memory TTL cache + catalog persistence
-│   │   ├── intent.ts           # Query intent classification (offline)
-│   │   ├── match.ts            # Candidate→profile matching scorer
-│   │   ├── journey.ts          # Requirements parser (categories + checks)
-│   │   ├── documents.ts        # Requirement ↔ document matching
-│   │   ├── status.ts…          # (helpers: status, format, types, API types)
-├── store/                      # Zustand stores (auth, app, scholarship results)
-└── proxy.ts                    # Session-refresh middleware
-supabase/
-└── migrations/                 # 001…015 versioned SQL
-```
+1. **Clone & install**
+   ```bash
+   npm install
+   ```
+
+2. **Configure environment**
+   ```bash
+   cp .env.example .env.local
+   ```
+   Fill in your Supabase, Groq, and Tavily keys (see above). The app auto-redirects to `/auth` if the session is missing.
+
+3. **Set up Supabase**
+   - Create a project, then run the migrations in `supabase/migrations/` in order (or push them via the Supabase CLI):
+     ```bash
+     supabase db push
+     ```
+   - Enable **Google OAuth** (and optionally email provider) in Authentication → Providers, and add `http://localhost:3000` as an allowed redirect URL.
+   - Make sure the `documents` storage bucket ships with migration 008 (RLS policies included).
+
+4. **Run the app**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000), sign up, complete onboarding, and search for a scholarship.
 
 ---
 
-## Environment variables
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Public anon key (RLS applies) |
-| `SUPABASE_SERVICE_ROLE_KEY` | ⬜ | Catalog persistence / backfill (scraper) — safe to leave empty for live discovery only |
-| `GROQ_API_KEY` | ✅ | Primary LLM provider |
-| `TAVILY_API_KEY` | ✅ | Web discovery (scholarship search provider) |
-| `GEMINI_API_KEY` | ⬜ | SOP-generation fallback provider |
-| `RESEND_API_KEY` | ⬜ | Deadline / reminder emails |
-| `CRON_SECRET` | ⬜ | Auth for the scheduled alert endpoint |
-
-Copy `.env.example` to `.env.local` and fill in what you have. The app warns (and
-degrades gracefully) when Supabase keys are missing.
-
-> No secrets are ever exposed to the browser — provider keys are only read
-> inside API route handlers.
-
----
-
-## Getting started
-
-```bash
-npm install
-cp .env.example .env.local   # then fill in your values
-npm run dev                  # http://localhost:3000
-```
-
-The app works with live discovery using only public keys; a Supabase project is
-needed for auth, persistence, and the catalog.
-
----
-
-## Scripts
+## Run & Build Commands
 
 | Command | Description |
 | --- | --- |
 | `npm run dev` | Start the dev server (Turbopack) |
 | `npm run build` | Production build |
-| `npm run start` | Serve the production build |
+| `npm start` | Start the production server |
 | `npm run lint` | ESLint |
+| `npx tsc --noEmit` | TypeScript type checking |
 
 ---
 
-## Quality & validation
+## Main Routes & Modules
 
-This repo ships without a test suite; correctness is enforced through pipeline
-stages instead:
+| Route | Page / Purpose |
+| --- | --- |
+| `/auth` | Login / sign-up (email + Google OAuth) |
+| `/onboarding` | Profile + preferences wizard |
+| `/dashboard` | Readiness overview, stats & recommendations |
+| `/scholarships` | Scholarship discovery & search |
+| `/scholarships/[id]` | Verified scholarship detail + journey entry |
+| `/applications` | Tracked applications list |
+| `/applications/[id]` | Application preparation journey |
+| `/sop-generator` | Standalone SOP generator |
+| `/claim-checker` | Claim / SOP audit |
+| `/profile` | Edit profile & documents |
 
-```bash
-npm run lint      # ESLint
-npx tsc --noEmit  # TypeScript type-checking
-npm run build     # Full production build (catches route/SSR issues)
-```
-
-Every schema change is a versioned migration, so the database can be rebuilt
-deterministically from scratch.
-
----
-
-## Design principles
-
-- **Monochrome by choice.** Black, white, and grays only — no gradients, no
-  glow, no decorative color. Color is saved for three cheap signals: urgency
-  (deadlines), status, and errors.
-- **Truthful UI.** Statuses, progress, and dates are derived from real data or
-  clearly marked as "to be confirmed". Nothing is hardcoded or prettified.
-- **Aid, don't replace, judgment.** The profile match, claim checker, and
-  requirement matcher all say what they know and explicitly flag what they
-  don't.
+| API | Purpose |
+| --- | --- |
+| `POST /api/scholarships/search` | Run the discovery pipeline (filters + refresh option) |
+| `POST /api/scholarships/program-options` | Re-read an official page for its listed programs |
+| `POST /api/generate-sop` | Generate or improve an SOP (Groq, Gemini fallback) |
+| `POST /api/check-claims` | Audit a single claim or a whole SOP document |
 
 ---
 
-## Current status & known limits
+## Security Considerations
 
-- ✅ Live discovery works end-to-end with public keys only (search → verify → extract → sort).
-- ✅ Application journey, SOP generation, claim checking, and email alerts are implemented.
-- ⬜ **Catalog backfill is the remaining automation** — persisting discovery
-  results into the `scholarships` catalog needs the `SUPABASE_SERVICE_ROLE_KEY`
-  and is the planned production scraper step. Without it, the catalog stays
-  empty and every search is live.
-- ⬜ Groq rate limits (HTTP 429) are handled with retry + metadata fallback, but
-  under heavy load extraction quality can degrade.
-- ⬜ Alert emails only send once `RESEND_API_KEY` is configured; the cron
-  already honours per-user notification preferences for all three reminders.
+- **Row-Level Security everywhere.** The anon key cannot read or write other users' rows or the storage bucket outside its own `user_id` prefix.
+- **Service role is server-side only.** The `SUPABASE_SERVICE_ROLE_KEY` never reaches the client; only API routes use it (e.g. verifying/persisting the scholarship catalog).
+- **Official URL strictness.** Only URLs that pass the blocked-source check and the official-source verification/trust gate are rendered as "Official" or "Apply on the official website". The program-options endpoint additionally refuses private hosts and non-`http(s)` schemes.
+- **Fetch safety.** Scraping respects robots.txt, caps page size (~1.6 MB), times out, and never bypasses CAPTCHAs or paywalls.
+- **No invented data.** Extraction, SOP generation, and claim checking are all prompt-constrained and validated so the app never fabricates facts, requirements, or URLs; unverified values render as "Not specified".
+- **Server-side API keys** (`GROQ_API_KEY`, `TAVILY_API_KEY`) are only read in route handlers.
+- **No credentials in the repo.** All secrets come from environment variables.
 
 ---
 
-## Future improvements
+## Current Project Status
 
-- Production scraper / backfill job into the `scholarships` catalog (using the service-role key),
-  so the index grows and repeated searches hit cached catalog rows.
-- On-dashboard **recommendation modules** (the matching and filtering
-  foundations already exist in `lib/scholarship/match.ts` and the discovery
-  filters).
-- Automatic re-verification of catalog scholarships to keep `current_status`
-  fresh.
-- Notification UI wiring for document and profile reminders.
-- A proper test suite (the pipeline modules are pure enough to unit-test
-  directly).
+The application is **functional end-to-end**: authentication and onboarding, verified scholarship discovery (Tavily + Cheerio + Groq), the application preparation journey with document storage and readiness scoring, the SOP generator (with saved drafts), the claim checker, and the dashboard are all working in the current codebase.
+
+### What's implemented
+- Verified-official search with structured AI extraction and 30-minute caching.
+- Program/fields re-reading for tracked applications.
+- 6-step application journey with persisted state and per-step validation.
+- Conservative "ready" document detection with synonym matching.
+- SOP generate + improve modes with profile awareness and session prefill.
+- Claim auditing for individual claims and full documents, with a profile context.
+- Branded, accessible UI (Tailwind v4) with a graduation-cap brand mark and reduced-motion support.
+
+### Not included
+- Email automation and notification delivery are intentionally out of scope in the current build (some legacy endpoints/dependencies remain reserved and undocumented).
+- Scholarship catalog persistence is optional and keyed to the service role; discovery works fully with in-memory caching.
+
+---
+
+## Future Improvements
+
+- Scheduled refresh of the scholarship catalog and per-user discovery "watches".
+- In-app deadline notifications (UI-level) instead of external channels.
+- Multi-document upload with resume parsing into profile facts.
+- Claim-checker history and compare-across-applications views.
+- Admin/moderation surface for verifying and editing the official catalog.
+- Expanded country/destination coverage and more regional authorities in the trusted list.

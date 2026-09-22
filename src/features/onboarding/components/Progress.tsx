@@ -8,7 +8,11 @@ export default function Progress({ current }: { current: number }) {
           <div
             key={s}
             className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-              i <= current ? "bg-gray-900" : "bg-gray-200"
+              i <= current
+                ? i === current
+                  ? "bg-primary shadow-[0_0_0_3px_rgba(82,137,173,0.12)]"
+                  : "bg-primary-deep"
+                : "bg-gray-200"
             }`}
           />
         ))}
@@ -18,7 +22,11 @@ export default function Progress({ current }: { current: number }) {
           <span
             key={s}
             className={`font-mono text-[10px] uppercase tracking-[0.18em] ${
-              i === current ? "text-gray-900" : i < current ? "text-gray-500" : "text-gray-300"
+              i === current
+                ? "text-primary-ink"
+                : i < current
+                  ? "text-gray-500"
+                  : "text-gray-300"
             }`}
           >
             {String(i + 1).padStart(2, "0")} · {s}

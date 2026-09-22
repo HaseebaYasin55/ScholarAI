@@ -24,7 +24,7 @@ const CARD_ELEVATION =
 const CARD_ELEVATION_HOVER =
   "hover:shadow-[0_2px_4px_rgba(0,0,0,0.05),0_22px_44px_-24px_rgba(0,0,0,0.4)]";
 const BTN_PRIMARY_ELEVATION =
-  "shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_18px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_14px_24px_-12px_rgba(0,0,0,0.45)]";
+  "shadow-[0_1px_2px_rgba(36,60,76,0.4),0_10px_18px_-12px_rgba(62,110,146,0.55)] hover:shadow-[0_1px_2px_rgba(36,60,76,0.4),0_14px_24px_-12px_rgba(62,110,146,0.5)]";
 const EMPTY_ELEVATION =
   "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-24px_rgba(0,0,0,0.25)]";
 
@@ -64,7 +64,7 @@ export default function ApplicationCards() {
         <div
           className={`rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center ${EMPTY_ELEVATION}`}
         >
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-gray-500 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-gray-500 shadow-chip">
             <GraduationCap className="h-5 w-5" />
           </span>
           <p className="mt-4 text-[15px] font-bold tracking-tight text-gray-900">
@@ -79,7 +79,7 @@ export default function ApplicationCards() {
           </p>
           <Link
             href="/scholarships"
-            className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_18px_-12px_rgba(0,0,0,0.5)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-gray-800 hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_14px_24px_-12px_rgba(0,0,0,0.45)] active:translate-y-0"
+            className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-primary-deep px-5 py-2.5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(36,60,76,0.4),0_10px_18px_-12px_rgba(62,110,146,0.55)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-ink hover:shadow-[0_1px_2px_rgba(36,60,76,0.4),0_14px_24px_-12px_rgba(62,110,146,0.5)] active:translate-y-0"
           >
             <Search className="h-4 w-4" />
             Discover scholarships
@@ -186,7 +186,7 @@ export default function ApplicationCards() {
                   </div>
                   <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
                     <div
-                      className="h-full rounded-full bg-gray-900 transition-[width] duration-500"
+                      className="h-full rounded-full bg-primary-deep transition-[width] duration-500"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
@@ -218,7 +218,7 @@ export default function ApplicationCards() {
                     )}
                     <Link
                       href={applicationJourneyUrl(app)}
-                      className={`ml-auto inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-[12px] font-semibold text-white transition-all duration-150 hover:-translate-y-0.5 hover:bg-gray-800 active:translate-y-0 ${BTN_PRIMARY_ELEVATION}`}
+                      className={`ml-auto inline-flex items-center gap-1.5 rounded-xl bg-primary-deep px-4 py-2 text-[12px] font-semibold text-white transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-ink active:translate-y-0 ${BTN_PRIMARY_ELEVATION}`}
                     >
                       Continue application
                       <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />

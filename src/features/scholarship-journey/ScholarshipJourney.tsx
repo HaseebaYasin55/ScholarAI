@@ -104,9 +104,9 @@ function StepRail({
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[12px] font-semibold ${
           state === "done"
-            ? "border-gray-900 bg-gray-900 text-white"
+            ? "border-primary-deep bg-primary-deep text-white shadow-[0_1px_2px_rgba(36,60,76,0.4),0_6px_10px_-6px_rgba(62,110,146,0.6)]"
             : state === "current"
-              ? "border-gray-900 bg-white text-gray-900"
+              ? "border-primary bg-white text-primary-ink shadow-[0_0_0_3px_rgba(82,137,173,0.12)]"
               : "border-gray-200 bg-white text-gray-400"
         }`}
       >
@@ -141,7 +141,7 @@ function StatusPill({
   > = {
     ready: {
       text: "text-gray-900",
-      pill: "bg-gray-900 text-white",
+      pill: "bg-primary-deep text-white shadow-chip",
       mark: <Check className="h-3 w-3" />,
     },
     missing: {
@@ -536,7 +536,7 @@ export default function ScholarshipJourney({
   );
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card">
       {/* Header */}
       <div className="border-b border-gray-100 bg-gray-50/60 px-6 py-5">
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400">
@@ -607,7 +607,7 @@ export default function ScholarshipJourney({
             </div>
           )}
           {success && (
-            <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-sm text-gray-700">
+            <div className="mb-5 rounded-xl border border-primary/20 bg-primary-tint/50 p-3.5 text-sm text-primary-ink">
               {success}
             </div>
           )}
@@ -624,7 +624,7 @@ export default function ScholarshipJourney({
                 <button
                   onClick={handleStart}
                   disabled={deadlinePassed}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_6px_14px_rgba(0,0,0,0.25)] transition-all hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-deep px-6 py-3 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_6px_14px_rgba(36,60,76,0.3)] transition-all hover:-translate-y-0.5 hover:bg-primary-ink disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {deadlinePassed ? (
                     "Deadline passed"
@@ -642,7 +642,7 @@ export default function ScholarshipJourney({
               {/* Step 2 — Choose program */}
               <div>
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-deep text-white shadow-chip">
                     <GraduationCap className="h-4 w-4" />
                   </span>
                   <div>
@@ -660,7 +660,7 @@ export default function ScholarshipJourney({
                       <select
                         value={establishedProgram}
                         onChange={(e) => handleProgramChange(e.target.value)}
-                        className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-colors focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:border-primary focus:ring-[3px] focus:ring-primary/15"
                       >
                         <option value="">Select a program</option>
                         {programOptions.map((p) => (
@@ -716,7 +716,7 @@ export default function ScholarshipJourney({
                           value={programInput}
                           onChange={(e) => handleProgramChange(e.target.value)}
                           placeholder="e.g. MSc Computer Science"
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5"
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-[3px] focus:ring-primary/15"
                         />
                         <button
                           onClick={applyProgram}
@@ -736,7 +736,7 @@ export default function ScholarshipJourney({
                   {/* Step 3 — Requirements */}
                   <div>
                     <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-deep text-white shadow-chip">
                         <FileText className="h-4 w-4" />
                       </span>
                       <div>
@@ -783,7 +783,7 @@ export default function ScholarshipJourney({
                   {/* Step 4 — Your documents + missing actions */}
                   <div>
                     <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-deep text-white shadow-chip">
                         <CheckCircle2 className="h-4 w-4" />
                       </span>
                       <div>
@@ -812,7 +812,7 @@ export default function ScholarshipJourney({
                           className={`mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs font-medium text-gray-500 transition-colors ${
                             uploading === "cv"
                               ? "cursor-wait opacity-60"
-                              : "cursor-pointer hover:border-gray-900 hover:text-gray-900"
+                              : "cursor-pointer hover:border-primary-deep hover:bg-primary-tint/40 hover:text-primary-ink"
                           }`}
                         >
                           <input
@@ -848,7 +848,7 @@ export default function ScholarshipJourney({
                           className={`mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs font-medium text-gray-500 transition-colors ${
                             uploading === "transcript"
                               ? "cursor-wait opacity-60"
-                              : "cursor-pointer hover:border-gray-900 hover:text-gray-900"
+                              : "cursor-pointer hover:border-primary-deep hover:bg-primary-tint/40 hover:text-primary-ink"
                           }`}
                         >
                           <input
@@ -879,7 +879,7 @@ export default function ScholarshipJourney({
                               return (
                                 <label
                                   key={c.key}
-                                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-gray-800"
+                                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary-deep px-3.5 py-2 text-xs font-semibold text-white shadow-chip transition-colors hover:bg-primary-ink"
                                 >
                                   <Upload className="h-3.5 w-3.5" />
                                   Upload CV
@@ -895,7 +895,7 @@ export default function ScholarshipJourney({
                               return (
                                 <label
                                   key={c.key}
-                                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-gray-800"
+                                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary-deep px-3.5 py-2 text-xs font-semibold text-white shadow-chip transition-colors hover:bg-primary-ink"
                                 >
                                   <Upload className="h-3.5 w-3.5" />
                                   Upload Transcript
@@ -914,7 +914,7 @@ export default function ScholarshipJourney({
                                 <button
                                   key={c.key}
                                   onClick={handleGenerateSop}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-gray-800"
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-deep px-3.5 py-2 text-xs font-semibold text-white shadow-chip transition-colors hover:bg-primary-ink"
                                 >
                                   <Sparkles className="h-3.5 w-3.5" />
                                   Generate SOP
@@ -950,7 +950,7 @@ export default function ScholarshipJourney({
                     </div>
                     <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
                       <div
-                        className="h-full rounded-full bg-gray-900 transition-all duration-500"
+                        className="h-full rounded-full bg-primary-deep transition-all duration-500"
                         style={{ width: `${readiness.pct}%` }}
                       />
                     </div>
@@ -1000,7 +1000,7 @@ export default function ScholarshipJourney({
                     <div
                       className={`rounded-xl border p-5 ${
                         readyToApply
-                          ? "border-gray-900 bg-gray-900 text-white"
+                          ? "border-primary-deep bg-primary-deep text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_30px_-20px_rgba(62,110,146,0.7)]"
                           : "border-gray-200 bg-white"
                       }`}
                     >
@@ -1034,7 +1034,7 @@ export default function ScholarshipJourney({
                             className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all ${
                               readyToApply
                                 ? "bg-white text-gray-900 hover:bg-gray-100"
-                                : "bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40"
+                                : "bg-primary-deep text-white hover:bg-primary-ink disabled:opacity-40"
                             }`}
                           >
                             Apply on Official Website
@@ -1071,7 +1071,7 @@ export default function ScholarshipJourney({
                             className={`mt-3 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all disabled:cursor-wait disabled:opacity-60 ${
                               readyToApply
                                 ? "bg-white text-gray-900 hover:bg-gray-100"
-                                : "bg-gray-900 text-white hover:bg-gray-800"
+                                : "bg-primary-deep text-white hover:bg-primary-ink"
                             }`}
                           >
                             {confirming ? (

@@ -28,10 +28,9 @@ const GREETINGS = [
 
 // Layered elevation: a soft contact shadow plus a wider diffuse one. Buttons
 // get a slightly denser shadow so they feel pressable.
-const HERO_ELEVATION =
-  'shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_36px_-26px_rgba(0,0,0,0.3)]';
-const BTN_BLACK_ELEVATION =
-  'shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_18px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_14px_24px_-12px_rgba(0,0,0,0.45)]';
+const HERO_ELEVATION = 'shadow-card-hover';
+const BTN_PRIMARY_ELEVATION =
+  'shadow-[0_1px_2px_rgba(36,60,76,0.4),0_10px_18px_-12px_rgba(62,110,146,0.55)] hover:shadow-[0_1px_2px_rgba(36,60,76,0.4),0_14px_24px_-12px_rgba(62,110,146,0.5)]';
 const BTN_LIGHT_ELEVATION =
   'shadow-[0_1px_2px_rgba(0,0,0,0.05),0_8px_16px_-12px_rgba(0,0,0,0.25)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.06),0_12px_22px_-12px_rgba(0,0,0,0.3)]';
 
@@ -63,15 +62,28 @@ export default function DashboardPage() {
         <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
           {/* Hero */}
           <section
-            className={`mb-8 overflow-hidden rounded-3xl border border-gray-200 bg-white p-6 sm:p-8 ${HERO_ELEVATION}`}
+            className={`relative mb-8 overflow-hidden rounded-3xl border border-gray-200 bg-white p-6 sm:p-8 ${HERO_ELEVATION}`}
           >
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-gray-200/40 blur-3xl"
+            />
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-gray-400">
+                <p className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.24em] text-gray-400">
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_0_3px_rgba(82,137,173,0.18)]"
+                  />
                   ScholarAI workspace
                 </p>
                 <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-                  {greeting}, {firstName}.
+                  {greeting},{" "}
+                  <span className="text-primary-ink">{firstName}</span>.
                 </h1>
                 <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-gray-500">
                   Scholarships and SOPs — everything for your applications in
@@ -89,7 +101,7 @@ export default function DashboardPage() {
                       href={action.href}
                       className={`group inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-5 py-3 text-sm font-semibold transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 sm:w-auto ${
                         primary
-                          ? `bg-gray-900 text-white hover:bg-gray-800 ${BTN_BLACK_ELEVATION}`
+                          ? `bg-primary-deep text-white hover:bg-primary-ink ${BTN_PRIMARY_ELEVATION}`
                           : `border border-gray-300 bg-white text-gray-900 hover:border-gray-900 ${BTN_LIGHT_ELEVATION}`
                       }`}
                     >

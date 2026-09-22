@@ -58,8 +58,10 @@ export default function ChipGroup({
                   )}
                 </span>
                 <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                    selected ? "border-white bg-white text-gray-900" : "border-gray-300 text-transparent"
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all ${
+                    selected
+                      ? "border-primary bg-primary text-white shadow-[0_1px_2px_rgba(62,110,146,0.4)]"
+                      : "border-gray-300 text-transparent"
                   }`}
                 >
                   <Check className="h-3 w-3" />
@@ -84,8 +86,8 @@ export default function ChipGroup({
             onClick={() => toggle(o.value)}
             className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-150 ${
               selected
-                ? "border-gray-900 bg-gray-900 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
-                : "border-gray-300 bg-white text-gray-600 hover:border-gray-900 hover:text-gray-900"
+                ? "border-gray-900 bg-gray-900 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_2px_6px_-2px_rgba(36,60,76,0.45)]"
+                : "border-gray-300 bg-white text-gray-600 hover:border-primary-deep hover:text-gray-900"
             }`}
           >
             {o.label}

@@ -45,7 +45,7 @@ function ActionButton({
   const base =
     "inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50";
   const style = primary
-    ? "bg-gray-900 text-white hover:bg-gray-800"
+    ? "bg-primary-deep text-white hover:bg-primary-ink shadow-chip"
     : "border border-gray-200 bg-white text-gray-700 hover:border-gray-900 hover:text-gray-900";
   return (
     <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${style}`}>
@@ -202,7 +202,7 @@ export default function SOPResult({
         <div className="space-y-5 lg:col-span-2">
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
-              <Sparkles className="h-4 w-4 text-gray-900" />
+              <Sparkles className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold text-gray-900">AI suggestions</h3>
             </div>
             <div className="space-y-3 p-5">
@@ -230,7 +230,7 @@ export default function SOPResult({
             <button
               type="button"
               onClick={onCheckClaims}
-              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-gray-800"
+              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary-deep px-3.5 text-[13px] font-semibold text-white shadow-chip transition-colors hover:bg-primary-ink"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
               Check claims

@@ -475,7 +475,7 @@ export default function SOPGeneratorPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="h-12 w-12 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900" />
+        <div className="h-12 w-12 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
       </div>
     );
   }
@@ -555,7 +555,7 @@ export default function SOPGeneratorPage() {
           {step === "generating" && (
             <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_14px_30px_-26px_rgba(0,0,0,0.3)]">
               <div className="flex items-start gap-4 p-6 sm:p-8">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gray-900 text-white shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_18px_-12px_rgba(0,0,0,0.5)]">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary-deep text-white shadow-[0_1px_2px_rgba(36,60,76,0.4),0_10px_18px_-12px_rgba(62,110,146,0.55)]">
                   <Loader2 className="h-5 w-5 animate-spin" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -567,7 +567,7 @@ export default function SOPGeneratorPage() {
                     from your profile and instructions. This usually takes about a minute.
                   </p>
                   <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-gray-100">
-                    <div className="h-full w-2/3 animate-pulse rounded-full bg-gray-900" />
+                    <div className="h-full w-2/3 animate-pulse rounded-full bg-primary" />
                   </div>
                 </div>
               </div>
@@ -662,8 +662,8 @@ export default function SOPGeneratorPage() {
             </div>
 
             {linkApp && (
-              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-gray-900/10 bg-gray-900/5 px-4 py-3 text-[13px] text-gray-700">
-                <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-gray-900" />
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-primary/20 bg-primary-tint/50 px-4 py-3 text-[13px] text-primary-ink">
+                <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <p>
                   Choose a saved SOP and press{" "}
                   <span className="font-semibold text-gray-900">Link</span> to attach it to this

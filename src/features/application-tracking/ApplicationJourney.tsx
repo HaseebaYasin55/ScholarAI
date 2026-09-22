@@ -29,14 +29,14 @@ type StepState = "done" | "current" | "todo";
 function StepIcon({ index, state }: { index: number; state: StepState }) {
   if (state === "done") {
     return (
-      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-900 bg-gray-900 text-white">
+      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-primary-deep bg-primary-deep text-white shadow-[0_1px_2px_rgba(36,60,76,0.4),0_4px_8px_-4px_rgba(62,110,146,0.6)]">
         <Check className="h-3.5 w-3.5" />
       </div>
     );
   }
   if (state === "current") {
     return (
-      <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-gray-900 bg-white text-[11px] font-semibold text-gray-900">
+      <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-primary bg-white text-[11px] font-semibold text-primary-ink shadow-[0_0_0_3px_rgba(82,137,173,0.12)]">
         {index}
       </div>
     );
@@ -92,9 +92,9 @@ function StepCard({
           <span
             className={`hidden rounded-full border px-2.5 py-0.5 text-[11px] font-semibold sm:inline-flex ${
               state === "done"
-                ? "border-gray-900 bg-gray-900 text-white"
+                ? "border-primary-deep bg-primary-deep text-white shadow-chip"
                 : state === "current"
-                  ? "border-gray-900/20 bg-gray-50 text-gray-900"
+                  ? "border-primary/25 bg-primary-tint/40 text-primary-ink"
                   : "border-gray-200 bg-gray-50 text-gray-500"
             }`}
           >
@@ -570,7 +570,7 @@ export default function ApplicationJourney({
                   }
                   disabled={refreshingPrograms}
                   aria-label="Choose your program"
-                  className="flex w-full max-w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 sm:flex-1"
+                  className="flex w-full max-w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-[3px] focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 sm:flex-1"
                 />
               )}
               <button
@@ -640,7 +640,7 @@ export default function ApplicationJourney({
                       {d.required}
                     </span>
                     {d.ready ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-900 bg-gray-900 px-2 py-0.5 text-[11px] font-semibold text-white">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-deep bg-primary-deep px-2 py-0.5 text-[11px] font-semibold text-white shadow-chip">
                         <Check className="h-3 w-3" />
                         Ready
                       </span>
@@ -694,7 +694,7 @@ export default function ApplicationJourney({
                         </p>
                       </div>
                       {d.ready ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-900 bg-gray-900 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-deep bg-primary-deep px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-chip">
                           <Check className="h-3 w-3" />
                           Ready
                         </span>
@@ -772,7 +772,7 @@ export default function ApplicationJourney({
                           </p>
                         </div>
                         {linkedHere ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-900 bg-gray-900 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-deep bg-primary-deep px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-chip">
                             <Check className="h-3 w-3" />
                             Linked
                           </span>
@@ -839,7 +839,7 @@ export default function ApplicationJourney({
                 >
                   <span className="text-[13px] text-gray-700">{item.label}</span>
                   {item.valid ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-900 bg-gray-900 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-deep bg-primary-deep px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-chip">
                       <Check className="h-3 w-3" />
                       Complete
                     </span>
@@ -858,7 +858,7 @@ export default function ApplicationJourney({
               </p>
             )}
             {finishLine && (
-              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white">
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary-deep bg-primary-deep px-3 py-1 text-[11px] font-semibold text-white shadow-chip">
                 <Check className="h-3 w-3" />
                 Ready to apply
               </div>
@@ -913,7 +913,7 @@ export default function ApplicationJourney({
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card">
       {/* Header + progress */}
       <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400">
@@ -930,7 +930,7 @@ export default function ApplicationJourney({
                 .join(" · ")}
             </p>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary-deep bg-primary-deep px-3 py-1 text-[11px] font-semibold text-white shadow-chip">
             {displayStatus(application.status)}
           </span>
         </div>
@@ -945,7 +945,7 @@ export default function ApplicationJourney({
           </div>
           <div className="mt-2 h-1.5 w-full rounded-full bg-gray-100">
             <div
-              className="h-1.5 rounded-full bg-gray-900 transition-[width] duration-200"
+              className="h-1.5 rounded-full bg-primary-deep transition-[width] duration-200"
               style={{ width: `${Math.max(0, Math.min(100, effectivePct))}%` }}
             />
           </div>
@@ -993,13 +993,13 @@ export default function ApplicationJourney({
           </div>
         )}
         {success && (
-          <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-sm text-gray-700">
+          <div className="mb-4 rounded-xl border border-primary/20 bg-primary-tint/50 p-3.5 text-sm text-primary-ink">
             {success}
           </div>
         )}
 
         {applied ? (
-          <div className="rounded-xl border border-gray-900 bg-gray-900 p-5 text-white sm:p-6">
+          <div className="rounded-xl border border-primary-deep bg-primary-deep p-5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_30px_-20px_rgba(62,110,146,0.7)] sm:p-6">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-300">
               Application completed
             </p>

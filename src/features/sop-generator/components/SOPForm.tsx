@@ -24,7 +24,7 @@ function StepNode({
       <span
         className={`flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold transition-colors duration-200 ${
           done
-            ? "bg-gray-900 text-white shadow-[0_1px_2px_rgba(0,0,0,0.3),0_8px_14px_-8px_rgba(0,0,0,0.5)]"
+            ? "bg-primary-deep text-white shadow-[0_1px_2px_rgba(36,60,76,0.4),0_8px_14px_-8px_rgba(62,110,146,0.6)]"
             : "border border-gray-300 bg-white text-gray-500"
         }`}
       >
@@ -55,8 +55,8 @@ function StepHeader({
   return (
     <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/50 px-6 py-4">
       <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-[0_1px_2px_rgba(0,0,0,0.2),0_6px_12px_-8px_rgba(0,0,0,0.4)] transition-colors duration-200 ${
-          done ? "bg-gray-900" : "bg-gray-500"
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-[0_1px_2px_rgba(36,60,76,0.3),0_6px_12px_-8px_rgba(62,110,146,0.5)] transition-colors duration-200 ${
+          done ? "bg-primary-deep" : "bg-gray-500"
         }`}
       >
         <Icon className="h-4 w-4" />
@@ -104,7 +104,7 @@ export default function SOPForm({
           <StepNode done={step1Done} number="01" label="Target" />
           <div className="relative h-px flex-1 bg-gray-200">
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-gray-900 transition-all duration-500"
+              className="absolute inset-y-0 left-0 rounded-full bg-primary-deep transition-all duration-500"
               style={{ width: `${step1Done ? 100 : 0}%` }}
             />
           </div>
@@ -117,7 +117,7 @@ export default function SOPForm({
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
               pct === 100
-                ? "bg-gray-900 text-white"
+                ? "bg-primary-deep text-white shadow-chip"
                 : "bg-gray-100 text-gray-600"
             }`}
           >
@@ -178,7 +178,7 @@ export default function SOPForm({
               hint="From the university's official prompt. Leave empty if not specified."
               id="wordLimit"
             >
-              <div className="flex items-center rounded-xl border border-gray-300 bg-white transition-all focus-within:border-gray-900 focus-within:ring-2 focus-within:ring-gray-900/10">
+              <div className="flex items-center rounded-xl border border-gray-300 bg-white transition-all focus-within:border-primary focus-within:ring-[3px] focus-within:ring-primary/15">
                 <input
                   id="wordLimit"
                   type="number"
@@ -220,7 +220,7 @@ export default function SOPForm({
       <button
         type="submit"
         disabled={!canSubmit}
-        className="group w-full rounded-2xl bg-gray-900 px-6 py-4 text-[15px] font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.3),0_14px_26px_-14px_rgba(0,0,0,0.5)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-gray-800 hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_18px_32px_-14px_rgba(0,0,0,0.45)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+        className="group w-full rounded-2xl bg-primary-deep px-6 py-4 text-[15px] font-semibold text-white shadow-[0_1px_2px_rgba(36,60,76,0.4),0_14px_26px_-14px_rgba(62,110,146,0.55)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-ink hover:shadow-[0_1px_2px_rgba(36,60,76,0.4),0_18px_32px_-14px_rgba(62,110,146,0.5)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
       >
         <span className="inline-flex items-center justify-center gap-2">
           <Sparkles className="h-4.5 w-4.5" />

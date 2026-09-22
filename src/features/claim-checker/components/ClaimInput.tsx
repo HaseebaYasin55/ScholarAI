@@ -22,7 +22,7 @@ export default function ClaimInput({
     <div className="space-y-5">
       {source && (source.university || source.program) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-gray-200 bg-white px-4 py-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-deep text-white shadow-chip">
             <GraduationCap className="h-4 w-4" />
           </span>
           <div>
@@ -39,7 +39,7 @@ export default function ClaimInput({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card">
         <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50/70 px-6 py-4">
           <span className="flex items-center gap-2 text-sm font-semibold text-gray-700">
             <FileText className="h-4 w-4 text-gray-400" />
@@ -70,7 +70,7 @@ export default function ClaimInput({
         type="button"
         onClick={onSubmit}
         disabled={!canSubmit}
-        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary-deep px-6 py-4 text-[15px] font-semibold text-white shadow-[0_1px_2px_rgba(36,60,76,0.4),0_14px_26px_-14px_rgba(62,110,146,0.55)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-ink hover:shadow-[0_1px_2px_rgba(36,60,76,0.4),0_18px_32px_-14px_rgba(62,110,146,0.5)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
       >
         <Sparkles className="h-4.5 w-4.5" />
         Check Claims

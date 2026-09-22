@@ -1,30 +1,88 @@
 @import "tailwindcss";
 
+/* ───────────────────────────────────────────────────────────────────────────
+   ScholarAI design system
+   A calm, editorial, premium identity built on a blue-tinted neutral ramp.
+   The neutral `gray-*` scale is remapped so every existing utility site
+   instantly adopts the brand palette; `primary` supplies the signature accent.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* Surface & line tokens (brand) */
+  --color-surface: #f4fcfb;
+  --color-steel: #698696;
+  --color-line: #acbcbf;
+
+  /* Signature accent */
+  --color-primary: #5289ad;
+  --color-primary-deep: #3e6e92;
+  --color-primary-ink: #2c5878;
+  --color-primary-tint: #e1edf4;
+  --color-primary-soft: #cbe0ec;
+
+  /* Blue-tinted neutral ramp — remaps Tailwind's gray-* utilities */
+  --color-gray-50: #f4fcfb;
+  --color-gray-100: #eaf3f2;
+  --color-gray-200: #dce8e9;
+  --color-gray-300: #c3d2d5;
+  --color-gray-400: #8fa5ad;
+  --color-gray-500: #5c7480;
+  --color-gray-600: #4a6270;
+  --color-gray-700: #3b505c;
+  --color-gray-800: #2e4250;
+  --color-gray-900: #243c4c;
+  --color-gray-950: #1b2f3b;
+
+  /* Shadows — consistent elevation scale */
+  --shadow-card: 0 1px 2px rgba(36, 60, 76, 0.04),
+    0 16px 32px -28px rgba(36, 60, 76, 0.35);
+  --shadow-card-hover: 0 2px 4px rgba(36, 60, 76, 0.05),
+    0 24px 48px -28px rgba(36, 60, 76, 0.45);
+  --shadow-pop: 0 18px 44px -20px rgba(36, 60, 76, 0.35);
+  --shadow-chip: 0 1px 2px rgba(36, 60, 76, 0.06),
+    0 8px 18px -14px rgba(36, 60, 76, 0.3);
+  --shadow-chip-hover: 0 1px 2px rgba(36, 60, 76, 0.06),
+    0 14px 24px -14px rgba(36, 60, 76, 0.38);
+
+  /* Motion */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-surface);
+  color: var(--color-gray-900);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
+/* Selection */
+::selection {
+  background: rgba(82, 137, 173, 0.22);
+  color: var(--color-gray-950);
+}
+
+/* Refined focus ring everywhere */
+:focus-visible {
+  outline: 2px solid rgba(82, 137, 173, 0.55);
+  outline-offset: 2px;
+}
+
+/* Subtle scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-300) transparent;
+}
+
+/* ── Load-in animation (kept + refined) ── */
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -36,8 +94,144 @@ body {
   }
 }
 
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .rise-in {
-    animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: rise-in 0.7s var(--ease-out-quint) both;
+  }
+  .fade-in {
+    animation: fade-in 0.6s ease-out both;
+  }
+}
+
+/* ── Brand mark — mortarboard micro-drift ──
+   A barely-there vertical bob + gentle tilt so the cap feels like a small,
+   living brand detail. Dead-slow, low-amplitude, nothing flashy. */
+@keyframes scholarai-cap-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-1.1px) rotate(-1.2deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .scholarai-cap {
+    transform-box: fill-box;
+    transform-origin: 50% 68%;
+    animation: scholarai-cap-float 4.4s ease-in-out infinite;
+  }
+}
+
+/* ── Shared component primitives ──
+   Lightweight helpers so pages stay consistent without chasing every
+   inline utility. These complement (not replace) the existing utilities. */
+
+@layer components {
+  /* Primary action button — signature deep-blue, white text (AA >= 4.5) */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    background: var(--color-primary-deep);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(36, 60, 76, 0.3),
+      0 10px 18px -12px rgba(36, 60, 76, 0.5);
+    transition: all 0.15s ease-out;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-primary-ink);
+    transform: translateY(-1px);
+    box-shadow: 0 1px 2px rgba(36, 60, 76, 0.3),
+      0 14px 24px -12px rgba(36, 60, 76, 0.45);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Secondary / outline button */
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-gray-300);
+    background: #fff;
+    color: var(--color-gray-700);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(36, 60, 76, 0.04);
+    transition: all 0.15s ease-out;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--color-gray-900);
+    color: var(--color-gray-900);
+    transform: translateY(-1px);
+  }
+  .btn-secondary:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Neutral card surface */
+  .card {
+    background: #fff;
+    border: 1px solid var(--color-gray-200);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Input surface */
+  .field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-gray-300);
+    background: #fff;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    color: var(--color-gray-900);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field::placeholder {
+    color: var(--color-gray-400);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(82, 137, 173, 0.18);
+  }
+  .field:disabled {
+    background: var(--color-gray-50);
+    color: var(--color-gray-500);
+  }
+
+  /* Eyebrow label */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-gray-400);
   }
 }

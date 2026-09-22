@@ -1,17 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="15" fill="#111827" />
-  <path
-    d="M 21 28
-       C 29.17 14.33 37.08 15.83 40 18
-       C 42.92 20.17 44 26 43.5 29
-       C 43 32 40.08 34.17 37 36
-       C 33.92 37.83 27.42 38.17 25 40
-       C 22.58 41.83 21.33 45 22.5 47
-       C 23.67 49 28.5 52.33 32 52
-       C 35.5 51.67 41.58 46.17 43.5 45"
-    fill="none"
-    stroke="#ffffff"
-    stroke-width="7"
-    stroke-linecap="round"
-  />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="scholarai-tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e4a5c" />
+      <stop offset="1" stop-color="#243c4c" />
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#scholarai-tile)" />
+  <path d="M9.1 16.7c0 6.1 13.8 6.1 13.8 0" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" fill="none" />
+  <path d="M16 11.9L23.3 16.3L16 20.7L8.7 16.3Z" fill="#ffffff" stroke="#ffffff" stroke-width="1.2" stroke-linejoin="round" />
+  <circle cx="16" cy="11.4" r="1.9" fill="#ffffff" />
+  <path d="M23.3 16.3c1.9 0.4 2.9 2 3.1 4.3" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" fill="none" />
+  <circle cx="26.2" cy="21.2" r="1.15" fill="#ffffff" />
 </svg>
