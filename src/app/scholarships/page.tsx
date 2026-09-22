@@ -115,6 +115,7 @@ async function runSearchRequest(payload: {
   filters: Record<string, unknown>;
   limit?: number;
   refresh?: boolean;
+  citizenship?: string | null;
 }): Promise<ScholarshipSearchResponse> {
   const res = await fetch("/api/scholarships/search", {
     method: "POST",
@@ -201,6 +202,10 @@ export default function ScholarshipsPage() {
       if (!opts.silent) setLoading(true);
       setError("");
       try {
+        // The profile `country` is the user's citizenship — the pipeline uses
+        // it to filter scholarships whose official source explicitly excludes
+        // that nationality.
+        const citizenship = user?.country?.trim() || null;
         const payload = {
           query: opts.q,
           filters: {
@@ -212,6 +217,7 @@ export default function ScholarshipsPage() {
           },
           limit: 12,
           refresh: opts.refresh,
+          citizenship,
         };
         const res = await runSearchRequest(payload);
         setScholarships(res.results);
@@ -225,7 +231,7 @@ export default function ScholarshipsPage() {
         if (!opts.silent) setLoading(false);
       }
     },
-    [setResults],
+    [setResults, user],
   );
 
   const fillAndSearch = useCallback(

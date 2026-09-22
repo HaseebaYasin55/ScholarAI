@@ -14,7 +14,7 @@ import { extractScholarship } from "@/lib/scholarship/extract";
 // (the extractor never invents). When the page lists no concrete programs the
 // response is an empty list — the UI keeps its manual fallback.
 
-const FETCH_TIMEOUT_MS = 9_000;
+const FETCH_TIMEOUT_MS = 12_000;
 
 function parseHttpUrl(value: string): URL | null {
   try {
@@ -59,10 +59,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const page = await fetchPageText(url.href, FETCH_TIMEOUT_MS);
+    const page = await fetchPageText(url.href, FETCH_TIMEOUT_MS, {
+      enrich: true,
+      includePdf: true,
+    });
     const scholarship = await extractScholarship(page, { query: name || url.href });
     const fields = (scholarship?.fields ?? []).map((f) => f.trim()).filter(Boolean);
-    return NextResponse.json({ fields });
+    return NextResponse.json({
+      fields,
+      openToAllDisciplines: scholarship?.openToAllDisciplines === true,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not read the official page.";
     console.error("[/api/scholarships/program-options]", message);

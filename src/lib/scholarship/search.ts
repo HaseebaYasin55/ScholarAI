@@ -38,6 +38,9 @@ export interface SearchParams {
   filters?: SearchFilters;
   limit?: number;
   refresh?: boolean;
+  /** The user's nationality/citizenship (from their profile `country`), used
+   *  to filter scholarships whose official source explicitly excludes it. */
+  citizenship?: string | null;
 }
 
 // Budgets. Deliberately small: candidates are pruned hard BEFORE any expensive
@@ -294,6 +297,136 @@ function appliesFilters(
   return true;
 }
 
+// ─── Citizenship/nationality gate (profile `country` = citizenship) ─────────
+// A scholarship is excluded ONLY when its official page explicitly restricts
+// eligibility to a set of nationalities and the user's citizenship is not in
+// that set. Unknown / open-to-all / unusable values always pass — we never hide
+// a real scholarship on a guess.
+
+/** Demonyn/abbreviation → canonical country name (general, not scholarship
+ *  specific). Unknown values fall back to their own normalized form. */
+const NATIONALITY_TO_COUNTRY: Record<string, string> = {
+  american: "united states",
+  "american national": "united states",
+  usa: "united states",
+  us: "united states",
+  "u.s.": "united states",
+  "u.s.a.": "united states",
+  british: "united kingdom",
+  uk: "united kingdom",
+  "u.k.": "united kingdom",
+  "united kingdom of great britain and northern ireland": "united kingdom",
+  canadian: "canada",
+  australian: "australia",
+  "new zealander": "new zealand",
+  german: "germany",
+  french: "france",
+  italian: "italy",
+  spanish: "spain",
+  dutch: "netherlands",
+  belgian: "belgium",
+  austrian: "austria",
+  swiss: "switzerland",
+  swedish: "sweden",
+  norwegian: "norway",
+  danish: "denmark",
+  finnish: "finland",
+  irish: "ireland",
+  portuguese: "portugal",
+  greek: "greece",
+  polish: "poland",
+  czech: "czech republic",
+  hungarian: "hungary",
+  turkish: "turkey",
+  japanese: "japan",
+  chinese: "china",
+  "south korean": "south korea",
+  korean: "south korea",
+  korea: "south korea",
+  indian: "india",
+  pakistani: "pakistan",
+  bangladeshi: "bangladesh",
+  "sri lankan": "sri lanka",
+  nepali: "nepal",
+  malaysian: "malaysia",
+  singaporean: "singapore",
+  indonesian: "indonesia",
+  filipino: "philippines",
+  filipina: "philippines",
+  thai: "thailand",
+  vietnamese: "vietnam",
+  egyptian: "egypt",
+  nigerian: "nigeria",
+  kenyan: "kenya",
+  ghanaian: "ghana",
+  "south african": "south africa",
+  ethiopian: "ethiopia",
+  moroccan: "morocco",
+  tunisian: "tunisia",
+  brazilian: "brazil",
+  mexican: "mexico",
+  argentine: "argentina",
+  chilean: "chile",
+  colombian: "colombia",
+  israeli: "israel",
+  emirati: "united arab emirates",
+  saudi: "saudi arabia",
+  qatari: "qatar",
+  kuwaiti: "kuwait",
+  jordanian: "jordan",
+  lebanese: "lebanon",
+  omani: "oman",
+  bahraini: "bahrain",
+  russian: "russia",
+  ukrainian: "ukraine",
+  romanian: "romania",
+  bulgarian: "bulgaria",
+  croatian: "croatia",
+  serbian: "serbia",
+  slovak: "slovakia",
+  slovenian: "slovenia",
+  lithuanian: "lithuania",
+  latvian: "latvia",
+  estonian: "estonia",
+  iranian: "iran",
+  iraqi: "iraq",
+  afghan: "afghanistan",
+  afghanistan: "afghanistan",
+  myanmar: "myanmar",
+  cambodian: "cambodia",
+  laotian: "laos",
+  mongolian: "mongolia",
+};
+
+function normalizeNationality(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim().toLowerCase();
+  if (!raw) return null;
+  const key = raw.replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  if (!key) return null;
+  return NATIONALITY_TO_COUNTRY[key] ?? key;
+}
+
+/**
+ * True when the user's citizenship is compatible with the scholarship's stated
+ * nationality scope. Never excludes on unknown/unusable data.
+ */
+function nationalityAllowed(
+  s: Scholarship,
+  citizenship?: string | null,
+): boolean {
+  const citizen = normalizeNationality(citizenship);
+  if (!citizen) return true;
+  // Open to all nationalities, or nothing stated → always eligible.
+  if (s.nationalityOpenToAll !== false) return true;
+  // Restricted, but no usable country list was extracted → keep it (never
+  // wrongly hide based on a truncated/partial extraction).
+  const eligible = (s.eligibleNationalities ?? [])
+    .map(normalizeNationality)
+    .filter((n): n is string => n !== null);
+  if (eligible.length === 0) return true;
+  return eligible.includes(citizen);
+}
+
 // ─── Final assembly (verified-official + status + dedupe + filter) ───────────
 // Hard, non-negotiable gates before a scholarship can be shown:
 //   1. its official URL must not be a blocked source (aggregator/news/blog/…)
@@ -329,10 +462,11 @@ function assembleResults(
   opts: {
     filters: SearchFilters;
     wantedFields?: string[];
+    citizenship?: string | null;
     limit: number;
   },
 ): Scholarship[] {
-  const { filters, wantedFields, limit } = opts;
+  const { filters, wantedFields, citizenship, limit } = opts;
   const seenName = new Set<string>();
   const seenUrl = new Set<string>();
   const results: Scholarship[] = [];
@@ -362,6 +496,10 @@ function assembleResults(
     seenName.add(nameKey);
     // 4. Soft filter (country/degree/field/funding).
     if (!appliesFilters(s, filters, wantedFields)) continue;
+    // 5. Citizenship gate — the user's nationality is excluded only when the
+    //    official page explicitly lists the eligible nationalities and the
+    //    user's is not among them.
+    if (!nationalityAllowed(s, citizenship)) continue;
     results.push(s);
     if (results.length >= limit) break;
   }
@@ -376,6 +514,7 @@ export async function discoverScholarships(
   const query = params.query.trim();
   const filters = params.filters ?? {};
   const limit = Math.max(1, Math.min(params.limit ?? 12, 24));
+  const citizenship = params.citizenship?.trim() || null;
 
   if (!query && !filters.country && !(filters.degreeLevels?.length)) {
     throw new Error("A search query or a filter is required.");
@@ -389,6 +528,7 @@ export async function discoverScholarships(
       field: norm(filters.field),
       funding: norm(filters.funding),
       scholarshipType: norm(filters.scholarshipType),
+      citizenship: norm(citizenship),
       limit,
     }),
   );
@@ -504,7 +644,7 @@ export async function discoverScholarships(
   const pages = await mapConcurrent<WebResult, FetchedPage>(
     toFetch,
     FETCH_CONCURRENCY,
-    (candidate) => fetchPageText(candidate.url, FETCH_TIMEOUT_MS),
+    (candidate) => fetchPageText(candidate.url, FETCH_TIMEOUT_MS, { enrich: true, includePdf: true }),
   );
   const fetchedSet = new Set(pages.map((p) => p.url));
   for (const candidate of toFetch) {
@@ -561,10 +701,12 @@ export async function discoverScholarships(
   );
 
   // ── 6. Final assembly: official source required + status-priority ordering
-  //        (OPEN first, CLOSED/DEADLINE PASSED last) + dedupe + soft filters.
+  //        (OPEN first, CLOSED/DEADLINE PASSED last) + dedupe + soft filters +
+  //        citizenship gate.
   const results = assembleResults(extractedRaws, {
     filters,
     wantedFields: intent.mode === "general" ? intent.fields : undefined,
+    citizenship,
     limit,
   });
 

@@ -21,6 +21,8 @@ export async function POST(request: Request) {
   }
 
   const query = typeof body.query === "string" ? body.query.trim() : "";
+  const citizenship =
+    typeof body.citizenship === "string" ? body.citizenship.trim() : "";
   const limit =
     typeof body.limit === "number" && Number.isFinite(body.limit)
       ? Math.max(1, Math.min(Math.round(body.limit), 24))
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
       filters,
       limit,
       refresh,
+      citizenship,
     });
     return NextResponse.json(response);
   } catch (err) {

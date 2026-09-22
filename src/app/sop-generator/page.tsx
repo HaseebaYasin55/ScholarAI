@@ -2,6 +2,15 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  BookMarked,
+  Calendar,
+  Check,
+  Link2,
+  Loader2,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import Header from "@/components/Header";
 import SOPForm from "@/features/sop-generator/components/SOPForm";
 import SOPResult from "@/features/sop-generator/components/SOPResult";
@@ -21,7 +30,7 @@ import {
 } from "@/features/claim-checker/claimService";
 import { downloadSopAsDocx } from "@/features/sop-generator/docx";
 import { useAuthStore } from "@/store/authStore";
-import { useAppStore } from "@/store/appStore";
+import { useAppStore, type SOP } from "@/store/appStore";
 import { supabase } from "@/lib/supabase-browser";
 
 interface PrefsRow {
@@ -78,6 +87,42 @@ export default function SOPGeneratorPage() {
   const [isImproving, setIsImproving] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  const sops = useAppStore((s) => s.sops);
+  const applications = useAppStore((s) => s.applications);
+  const updateSOP = useAppStore((s) => s.updateSOP);
+  const deleteSOP = useAppStore((s) => s.deleteSOP);
+
+  // Saved SOPs library. The Application Journey deep-links here with
+  // ?tab=saved&application_id=<id> so "Manage SOPs" opens the library and the
+  // user can link an existing SOP straight back to a tracked application.
+  const [openTab, setOpenTab] = useState<"generate" | "saved">(() => {
+    try {
+      if (typeof window === "undefined") return "generate";
+      return new URLSearchParams(window.location.search).get("tab") === "saved"
+        ? "saved"
+        : "generate";
+    } catch {
+      return "generate";
+    }
+  });
+  const [linkAppId] = useState<string | null>(() => {
+    try {
+      if (typeof window === "undefined") return null;
+      return (
+        new URLSearchParams(window.location.search).get("application_id") ??
+        prefill?.application_id ??
+        null
+      );
+    } catch {
+      return null;
+    }
+  });
+  // When set, the editor is editing a previously saved SOP (Save updates it
+  // instead of creating a brand-new one).
+  const [editingSop, setEditingSop] = useState<SOP | null>(null);
+  const [linkingSopId, setLinkingSopId] = useState<string | null>(null);
+  const [deletingSopId, setDeletingSopId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -175,6 +220,7 @@ export default function SOPGeneratorPage() {
 
   const handleGenerate = async () => {
     setError("");
+    setEditingSop(null);
     setStep("generating");
     try {
       const res = await generateSOP(buildRequest("generate"));
@@ -189,6 +235,7 @@ export default function SOPGeneratorPage() {
 
   const handleRegenerate = async () => {
     setError("");
+    setEditingSop(null);
     setStep("generating");
     try {
       const res = await generateSOP(buildRequest("generate"));
@@ -234,18 +281,103 @@ export default function SOPGeneratorPage() {
     setError("");
     setIsSaving(true);
     try {
-      await saveSOP({
-        application_id: prefill?.application_id ?? null,
-        university: formData.university.trim(),
-        program: formData.program.trim(),
-        content: result.content,
-      });
+      const university = formData.university.trim();
+      const program = formData.program.trim();
+      if (editingSop) {
+        await updateSOP(editingSop.id, { university, program, content: result.content });
+      } else {
+        await saveSOP({
+          application_id: linkAppId,
+          university,
+          program,
+          content: result.content,
+        });
+      }
       setIsSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save the SOP.");
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // ── Saved SOPs library actions ────────────────────────────────────────────
+  const openSavedSop = (sop: SOP) => {
+    if (editingSop?.id === sop.id) {
+      setOpenTab("generate");
+      return;
+    }
+    setError("");
+    setEditingSop(sop);
+    setFormData({
+      university: sop.university,
+      program: sop.program,
+      wordLimit: "",
+      requirements: "",
+    });
+    setResult({ content: sop.content, suggestions: [] });
+    setIsSaved(true);
+    setStep("result");
+    setOpenTab("generate");
+  };
+
+  const discardSavedEdit = () => {
+    setEditingSop(null);
+    setResult(null);
+    setStep("form");
+    setFormData({
+      ...EMPTY_FORM,
+      university: prefill.university ?? "",
+      program: prefill.program ?? "",
+    });
+    setIsSaved(false);
+  };
+
+  const linkSopToApp = async (sop: SOP) => {
+    if (!linkAppId) return;
+    setLinkingSopId(sop.id);
+    setError("");
+    try {
+      await updateSOP(sop.id, { application_id: linkAppId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not link this SOP.");
+    } finally {
+      setLinkingSopId(null);
+    }
+  };
+
+  const deleteSavedSop = async (sop: SOP) => {
+    if (
+      !window.confirm(
+        `Delete the saved SOP for ${sop.university || "this university"}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingSopId(sop.id);
+    setError("");
+    try {
+      await deleteSOP(sop.id);
+      if (editingSop?.id === sop.id) discardSavedEdit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this SOP.");
+    } finally {
+      setDeletingSopId(null);
+    }
+  };
+
+  const linkApp = linkAppId ? applications.find((a) => a.id === linkAppId) : null;
+
+  const formatDate = (iso: string | undefined | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const previewOf = (content: string) => {
+    const clean = content.replace(/\s+/g, " ").trim();
+    return clean.length > 130 ? `${clean.slice(0, 130)}…` : clean;
   };
 
   const handleDownloadWord = () => {
@@ -307,55 +439,252 @@ export default function SOPGeneratorPage() {
             </p>
           </div>
 
+          {/* Tabs */}
+          <div className="mb-6 grid w-full grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => setOpenTab("generate")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                openTab === "generate"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              Generate
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpenTab("saved")}
+              className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                openTab === "saved"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              <BookMarked className="h-4 w-4" />
+              Saved SOPs
+              {sops.length > 0 && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                    openTab === "saved" ? "bg-gray-900 text-white" : "bg-gray-200 text-gray-600"
+                  }`}
+                >
+                  {sops.length}
+                </span>
+              )}
+            </button>
+          </div>
+
           {error && (
             <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          {step === "form" && (
-            <SOPForm
-              formData={formData}
-              setFormData={setFormData}
-              profileSummary={profileSummary}
-              canSubmit={canSubmit}
-              onSubmit={handleGenerate}
-            />
-          )}
+          {openTab === "saved" ? (
+            <div>
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-gray-400">
+                    Your library
+                  </p>
+                  <h2 className="mt-1 text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+                    Saved SOPs
+                  </h2>
+                  {linkApp && (
+                    <p className="mt-1 text-[13px] text-gray-500">
+                      Linking to application — {linkApp.university}
+                      {linkApp.program && linkApp.program !== "To be selected"
+                        ? ` · ${linkApp.program}`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+                {sops.length > 0 && (
+                  <span className="inline-flex shrink-0 items-center rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white">
+                    {sops.length} {sops.length === 1 ? "SOP" : "SOPs"}
+                  </span>
+                )}
+              </div>
 
-          {step === "generating" && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 py-24 shadow-sm">
-              <div className="h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
-              <h3 className="mt-6 text-lg font-semibold tracking-tight text-gray-900">
-                Writing your SOP…
-              </h3>
-              <p className="mt-2 max-w-sm text-center text-sm text-gray-500">
-                Tailoring a {formData.program || "program"} statement for{" "}
-                {formData.university || "your university"} from your profile and
-                instructions.
-              </p>
+              {linkApp && (
+                <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[13px] text-gray-600">
+                  Choose a saved SOP and press{" "}
+                  <span className="font-semibold text-gray-900">Link to this application</span> to
+                  attach it, then head back to your application journey.
+                </div>
+              )}
+
+              {sops.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
+                  <BookMarked className="mx-auto h-8 w-8 text-gray-300" />
+                  <p className="mt-3 text-sm font-semibold text-gray-900">No saved SOPs yet</p>
+                  <p className="mt-1 text-[13px] text-gray-500">
+                    Generate a statement of purpose and press Save SOP to build your library.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {sops.map((sop) => {
+                    const linkedHere = sop.application_id === linkAppId;
+                    const linkedApp = sop.application_id
+                      ? applications.find((a) => a.id === sop.application_id)
+                      : null;
+                    const isLinking = linkingSopId === sop.id;
+                    const isDeleting = deletingSopId === sop.id;
+                    return (
+                      <div
+                        key={sop.id}
+                        className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+                      >
+                        <div className="flex-1 p-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <h3 className="min-w-0 truncate text-[14px] font-semibold tracking-tight text-gray-900">
+                              {sop.university || "University"}
+                            </h3>
+                            {linkAppId && linkedHere ? (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gray-900 bg-gray-900 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                <Check className="h-3 w-3" />
+                                Linked
+                              </span>
+                            ) : (
+                              <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                                Saved
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 truncate text-[13px] font-medium text-gray-600">
+                            {sop.program || "Program pending"}
+                          </p>
+                          <p className="mt-2 line-clamp-2 text-[12px] leading-relaxed text-gray-500">
+                            {previewOf(sop.content)}
+                          </p>
+                          {sop.application_id && !linkedHere && linkedApp && (
+                            <p className="mt-2 text-[11px] text-gray-400">
+                              Currently linked to {linkedApp.university}
+                            </p>
+                          )}
+                        </div>
+                        <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
+                              <Calendar className="h-3.5 w-3.5" />
+                              Saved {formatDate(sop.created_at)}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openSavedSop(sop)}
+                                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-[11px] font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900"
+                              >
+                                <Pencil className="h-3 w-3" />
+                                Edit
+                              </button>
+                              {linkAppId && !linkedHere && (
+                                <button
+                                  type="button"
+                                  onClick={() => linkSopToApp(sop)}
+                                  disabled={isLinking}
+                                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-gray-900 bg-white px-2.5 text-[11px] font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  {isLinking ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Link2 className="h-3 w-3" />
+                                  )}
+                                  Link
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => deleteSavedSop(sop)}
+                                disabled={isDeleting}
+                                aria-label="Delete saved SOP"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {isDeleting ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          ) : (
+            <>
+              {step === "form" && (
+                <SOPForm
+                  formData={formData}
+                  setFormData={setFormData}
+                  profileSummary={profileSummary}
+                  canSubmit={canSubmit}
+                  onSubmit={handleGenerate}
+                />
+              )}
 
-          {step === "result" && result && (
-            <SOPResult
-              content={result.content}
-              suggestions={result.suggestions}
-              university={formData.university.trim()}
-              program={formData.program.trim()}
-              wordLimit={wordLimit}
-              setContent={handleSetContent}
-              onRegenerate={handleRegenerate}
-              onImprove={handleImprove}
-              onCopy={handleCopy}
-              onSave={handleSave}
-              onDownloadWord={handleDownloadWord}
-              onCheckClaims={handleCheckClaims}
-              isCopying={isCopying}
-              isImproving={isImproving}
-              isSaving={isSaving}
-              isSaved={isSaved}
-            />
+              {step === "generating" && (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 py-24 shadow-sm">
+                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
+                  <h3 className="mt-6 text-lg font-semibold tracking-tight text-gray-900">
+                    Writing your SOP…
+                  </h3>
+                  <p className="mt-2 max-w-sm text-center text-sm text-gray-500">
+                    Tailoring a {formData.program || "program"} statement for{" "}
+                    {formData.university || "your university"} from your profile and
+                    instructions.
+                  </p>
+                </div>
+              )}
+
+              {editingSop && step === "result" && result && (
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-gray-900">
+                      Editing a saved SOP
+                    </p>
+                    <p className="mt-0.5 truncate text-[12px] text-gray-500">
+                      {editingSop.university || "University"} · {editingSop.program || "Program"} —
+                      saved {formatDate(editingSop.created_at)}. Saving updates this saved draft.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={discardSavedEdit}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition-colors hover:border-gray-900 hover:text-gray-900"
+                  >
+                    Start a new SOP
+                  </button>
+                </div>
+              )}
+
+              {step === "result" && result && (
+                <SOPResult
+                  content={result.content}
+                  suggestions={result.suggestions}
+                  university={formData.university.trim()}
+                  program={formData.program.trim()}
+                  wordLimit={wordLimit}
+                  setContent={handleSetContent}
+                  onRegenerate={handleRegenerate}
+                  onImprove={handleImprove}
+                  onCopy={handleCopy}
+                  onSave={handleSave}
+                  onDownloadWord={handleDownloadWord}
+                  onCheckClaims={handleCheckClaims}
+                  isCopying={isCopying}
+                  isImproving={isImproving}
+                  isSaving={isSaving}
+                  isSaved={isSaved}
+                />
+              )}
+            </>
           )}
         </div>
       </main>

@@ -27,6 +27,7 @@ function cardTags(s: Scholarship): string[] {
     if (!tags.includes(label)) tags.push(label);
   }
   if (s.fields.length) tags.push(s.fields.slice(0, 2).join(" / "));
+  else if (s.openToAllDisciplines) tags.push("All academic disciplines");
   return tags.slice(0, 4);
 }
 

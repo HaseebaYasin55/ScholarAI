@@ -3,6 +3,10 @@
 // text, and provide domain-trust + hashing helpers used by the pipeline.
 // We deliberately do NOT bypass CAPTCHAs, paywalls, or anti-bot measures.
 
+import * as cheerio from "cheerio";
+import { PDFParse } from "pdf-parse";
+import { robotsAllow } from "./robots";
+
 const USER_AGENT =
   "Mozilla/5.0 (compatible; ScholarAI-Discovery/1.0; +https://scholarai.local)";
 
@@ -391,48 +395,82 @@ export function scholarshipId(url: string): string {
 
 // ─── HTML → text ─────────────────────────────────────────────────────────────
 
-function decodeEntities(text: string): string {
-  return text
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) =>
-      String.fromCodePoint(parseInt(hex, 16) || 63),
+export function htmlToText(html: string): string {
+  try {
+    const $ = cheerio.load(html);
+
+    // Structural chrome that is never scholarship content. Stripping nav /
+    // header / footer removes the "opens in a new window" style link noise that
+    // otherwise dominates short pages.
+    $(
+      "script,style,noscript,svg,iframe,template,canvas,audio,video,nav,header,footer,form,button,select,option,input,textarea",
+    ).remove();
+
+    // Hoist <time datetime="…"> so machine-readable exact dates survive even
+    // when the element has no inner text (common for deadline table cells).
+    $("time[datetime]").each((_, el) => {
+      const $el = $(el);
+      const dt = $el.attr("datetime");
+      if (!dt) return;
+      const label = $el.text().trim().replace(/\s+/g, " ");
+      if (label) $el.text(`${label} (${dt})`);
+      else $el.text(dt);
+    });
+
+    // Linearize tables: cells separated by a space, rows on their own line —
+    // the deadline/field-of-study data often lives in <table>/<li> markup.
+    $("td,th").each((_, el) => {
+      $(el).append(" ");
+    });
+    $("tr").each((_, el) => {
+      $(el).append("\n");
+    });
+    $(
+      "br,p,li,div,article,section,h1,h2,h3,h4,h5,h6,blockquote,table,ul,ol,details,summary,hr,caption,figcaption",
+    ).each((_, el) => {
+      $(el).append("\n");
+    });
+
+    const body = $("body").first();
+    return (
+      (body.length ? body.text() : $.root().text()) || ""
     )
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10) || 63))
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&ndash;/g, "–")
-    .replace(/&mdash;/g, "—")
-    .replace(/&hellip;/g, "…")
-    .replace(/&rsquo;/g, "'")
-    .replace(/&lsquo;/g, "'")
-    .replace(/&ldquo;/g, '"')
-    .replace(/&rdquo;/g, '"');
+      .replace(/\xa0/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/[ \t]*\n[ \t]*/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  } catch {
+    // Malformed HTML should never take the whole pipeline down.
+    return "";
+  }
 }
 
-export function htmlToText(html: string): string {
-  const withoutNoise = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<head[\s\S]*?<\/head>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ");
-
-  const text = withoutNoise
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|h1|h2|h3|h4|h5|h6|section|tr|blockquote|td)>/gi, "\n")
-    .replace(/<[^>]+>/g, " ");
-
-  return decodeEntities(text)
-    .replace(/[ \t]+/g, " ")
-    .replace(/[ \t]*\n[ \t]*/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+/** Extract <title> / og:title + meta description via a real DOM parse. */
+export function extractMeta(html: string): { title: string; description?: string } {
+  let title = "";
+  let description: string | undefined;
+  try {
+    const $ = cheerio.load(html);
+    title = (
+      $("title").first().text() ||
+      $('meta[property="og:title"]').attr("content") ||
+      ""
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200);
+    const desc =
+      $('meta[name="description"]').attr("content") ||
+      $('meta[property="og:description"]').attr("content") ||
+      "";
+    description = desc
+      ? desc.replace(/\s+/g, " ").trim().slice(0, 300)
+      : undefined;
+  } catch {
+    // fall through with empty metadata
+  }
+  return { title, description };
 }
 
 /** Heuristic charset handling — try utf-8, fall back to latin1 if garbled. */
@@ -465,6 +503,173 @@ export class PageFetchError extends Error {
   }
 }
 
+export interface FetchPageOptions {
+  /**
+   * Follow up to N same-origin official links (apply / deadline / programme /
+   * eligibility pages) and append their text to the main page. Fixes the common
+   * case where the scholarship HUB page links OUT to the pages that actually
+   * state the deadline and the eligible programmes.
+   */
+  enrich?: boolean;
+  /**
+   * Also follow eligible-programme links that point at PDF documents. Many
+   * scholarship sources (SH university portals, government PDFs) publish the
+   * programme list only in a PDF, so the enrichment must be able to read them.
+   */
+  includePdf?: boolean;
+}
+
+// Anchor text / path signals used to pick worthwhile sibling pages.
+const ENRICH_LINK_KEYWORDS =
+  /(deadline|apply|application|programme?s?|programs?|fields?\s+of\s+study|courses?|subjects?|eligibility|criter|intake|admission|closing|open|funding|award|scholarships?|degree)/i;
+
+// Never follow into non-PDF binary/download/feed artifacts.
+const ENRICH_SKIP =
+  /\.(docx?|xlsx?|pptx?|zip|png|jpe?g|gif|svg|css|js|json|xml|ics|rss)(\?|$)/i;
+
+const ENRICH_MAX_PAGES = 2;
+const ENRICH_BUDGET_CHARS = 120_000;
+
+/**
+ * Find same-origin pages worth reading to enrich a candidate page, based on
+ * the official site's OWN links — no hardcoded site layouts.
+ */
+export function findRelatedOfficialPages(
+  baseUrl: string,
+  html: string,
+  max = ENRICH_MAX_PAGES,
+  options?: { includePdf?: boolean },
+): string[] {
+  const out: string[] = [];
+  try {
+    const base = new URL(baseUrl);
+    const $ = cheerio.load(html);
+    const seen = new Set<string>();
+    $("a[href]").each((_, el) => {
+      if (out.length >= max) return;
+      const href = $(el).attr("href") ?? "";
+      if (!href || href.startsWith("#")) return;
+      let abs: URL;
+      try {
+        abs = new URL(href, base);
+      } catch {
+        return;
+      }
+      if (abs.origin !== base.origin) return;
+      if (abs.protocol !== "http:" && abs.protocol !== "https:") return;
+      if (base.hostname.endsWith(".blogspot.com") || abs.hostname.includes("api.")) return;
+      const clean = `${abs.origin}${abs.pathname}${abs.search}`;
+      if (ENRICH_SKIP.test(clean)) return;
+      if (/\.pdf(\?|$)/i.test(clean) && options?.includePdf !== true) return;
+      if (abs.pathname === "/") return;
+      if (abs.pathname === base.pathname) return;
+      const label = $(el).text().replace(/\s+/g, " ").trim().slice(0, 140);
+      if (!ENRICH_LINK_KEYWORDS.test(`${label} ${abs.pathname}`)) return;
+      if (seen.has(clean)) return;
+      seen.add(clean);
+      out.push(clean);
+    });
+  } catch {
+    // link graph unavailable → plain page only
+  }
+  return out;
+}
+
+function titleFromPdfUrl(url: string): string {
+  try {
+    const tail = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+    return tail.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ").trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Fetch a PDF document, cap its size, and extract its plain text via pdf.js.
+ * Used to read eligible-programme lists that official sources publish only as
+ * PDFs. Fails loudly so the pipeline can skip it gracefully.
+ */
+export async function fetchPdfText(
+  url: string,
+  timeoutMs = 8_000,
+): Promise<FetchedPage> {
+  if (!(await robotsAllow(url))) {
+    throw new PageFetchError("Blocked by robots.txt");
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "application/pdf,application/octet-stream",
+        "Accept-Language": "en-US,en;q=0.8",
+      },
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new PageFetchError(
+      `Request failed (${reason.includes("abort") ? "timeout" : reason})`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    throw new PageFetchError(`HTTP ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength > MAX_BYTES) {
+    throw new PageFetchError("Page too large");
+  }
+
+  const bytes = new Uint8Array(arrayBuffer);
+  if (bytes.length < 8) throw new PageFetchError("Not a PDF");
+  const magic = String.fromCharCode(
+    bytes[0],
+    bytes[1],
+    bytes[2],
+    bytes[3],
+    bytes[4],
+  );
+  if (!magic.startsWith("%PDF-")) {
+    throw new PageFetchError("Not a PDF");
+  }
+
+  let text: string;
+  try {
+    const parser = new PDFParse({ data: bytes });
+    const parsed = await parser.getText();
+    text = (parsed?.text ?? "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    await parser.destroy();
+  } catch {
+    throw new PageFetchError("PDF text unreadable");
+  }
+
+  if (text.length < 20) {
+    throw new PageFetchError("Page too thin");
+  }
+
+  return {
+    url,
+    host: getUrlHost(url),
+    trust: domainTrust(url),
+    text,
+    title: titleFromPdfUrl(url) || "Eligible programmes",
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Fetch a single page, cap its size, convert to plain text.
  * Fails loudly (throws) so the pipeline can skip it gracefully.
@@ -472,7 +677,14 @@ export class PageFetchError extends Error {
 export async function fetchPageText(
   url: string,
   timeoutMs = 8_000,
+  options?: FetchPageOptions,
 ): Promise<FetchedPage> {
+  // Respect the origin's robots.txt before touching the page. A disallowed
+  // page is a normal "could not read" skip for the pipeline.
+  if (!(await robotsAllow(url))) {
+    throw new PageFetchError("Blocked by robots.txt");
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -511,26 +723,35 @@ export async function fetchPageText(
   }
 
   const body = decodeBuffer(new Uint8Array(arrayBuffer));
-  const titleMatch = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  const title = decodeEntities(titleMatch?.[1] ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 200);
+  const meta = extractMeta(body);
+  const title = meta.title;
+  const description = meta.description;
 
-  const metaTag = body.match(
-    /<meta[^>]+(?:name|property)=["'](?:og:)?description["'][^>]*>/i,
-  )?.[0];
-  const description = metaTag
-    ? (decodeEntities(metaTag.match(/content=["']([^"']*)["']/i)?.[1] ?? "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 300) || undefined)
-    : undefined;
-
-  const text = htmlToText(body);
+  let text = htmlToText(body);
 
   if (text.length < 200) {
     throw new PageFetchError("Page too thin");
+  }
+
+  if (options?.enrich) {
+    const links = findRelatedOfficialPages(url, body, ENRICH_MAX_PAGES, {
+      includePdf: options.includePdf,
+    });
+    let extra = "";
+    for (const link of links) {
+      const isPdf = /\.pdf(\?|$)/i.test(link);
+      try {
+        const sibling = isPdf
+          ? await fetchPdfText(link, Math.min(timeoutMs, 6_000))
+          : await fetchPageText(link, Math.min(timeoutMs, 6_000));
+        const label = sibling.title.trim() || link;
+        extra += `\n\n[RELATED OFFICIAL PAGE${isPdf ? " (PDF)" : ""}: ${label}] (${link})\n${sibling.text}`;
+        if (extra.length > ENRICH_BUDGET_CHARS) break;
+      } catch {
+        // sibling unreadable / robots-disallowed → skip quietly
+      }
+    }
+    if (extra) text = truncateText(text + extra, 80_000);
   }
 
   return {

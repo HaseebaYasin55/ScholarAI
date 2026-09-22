@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase-browser';
+import { getAuthCallbackUrl } from '@/lib/auth-urls';
 import type { OnboardingData } from '@/features/onboarding/types';
 
 interface User {
@@ -98,7 +99,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signUp: async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: getAuthCallbackUrl(),
+      },
+    });
     if (error) throw error;
 
     if (!data.session) {
@@ -115,10 +122,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signInWithOAuth: async (provider: 'google') => {
+    const callback = getAuthCallbackUrl();
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callback,
       },
     });
     if (error) throw error;

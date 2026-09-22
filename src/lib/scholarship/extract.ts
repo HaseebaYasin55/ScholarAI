@@ -42,6 +42,12 @@ interface RawExtraction {
   officialUniversityUrl: string;
   description: string;
   applicationInfo: string;
+  /** Countries/nationalities the page explicitly states are eligible (verbatim). */
+  eligibleNationalities: string[];
+  /** Nationality scope: "open_to_all" | "restricted" | "" (not stated). */
+  nationalityRestriction: string;
+  /** True ONLY when the page explicitly says open to all academic disciplines. */
+  openToAllDisciplines: boolean;
 }
 
 // ─── Cleaning helpers ─────────────────────────────────────────────────────────
@@ -89,6 +95,146 @@ function cleanFields(value: unknown): string[] {
   return cleanList(value).filter((f) => !isBroadFieldStatement(f));
 }
 
+/** Explicit "open to all academic disciplines" statements on a page. */
+const ALL_DISCIPLINES_RE =
+  /(all academic disciplines|all (fields|areas|subject areas?) of study|any (academic )?(subject|discipline|field( of study)?)|open to all (subjects|disciplines|fields|areas))/i;
+
+function scrapeAllDisciplines(text: string): Scholarship["openToAllDisciplines"] {
+  return ALL_DISCIPLINES_RE.test(text) ? true : null;
+}
+
+// ─── Deterministic eligible-programme scanner ────────────────────────────────
+// Pulls the eligible programme list straight out of the official page text when
+// the LLM is unavailable (rate limit / outage). Deliberately conservative: a
+// candidate must be a section entry under an explicit programme heading OR carry
+// a real degree signal (MSc / Master of / PhD …), every entry is a verbatim line
+// from the page, and broad "all disciplines" statements are rejected so the UI
+// keeps its manual entry instead of inventing a list.
+
+// Whole-line (or short prefix) programme headings: "Eligible programmes",
+// "List of degrees", "Available courses for this scholarship:", …
+const PROGRAM_SECTION_HEAD_RE =
+  /^(?:list\s+of\s+|available\s+|eligible\s+|offered\s+|supported\s+|funded\s+|covered\s+|selected\s+|existing\s+|taught\s+|research\s+)?(?:programmes?|programs?|courses?|degrees?|fields\s+of\s+study|subjects?|disciplines?|specialis(?:a|z)ations?)\s*:?\s*$/i;
+
+// Programme entries written starting with an explicit degree token — the
+// dominant format on official pages ("MSc in X", "Master of Public Health",
+// "PhD in Computer Science", "BSc Nursing").
+const PROGRAM_LEAD_RE =
+  /^(?:master(?:'s|s)?\s+(?:of|in)|research\s+master(?:'s|s)?|professional\s+master(?:'s|s)?|msc\b|m\.\s*sc\b|mres\b|mphil\b|mba\b|m\.\s*a\b|ma\b|meng\b|m\.\s*eng\b|mtech\b|btech\b|mph\b|mlitt\b|mcom\b|llm\b|ph\.?\s*d\b|phd\b|dphil\b|doctorate\b|doctoral\b|bachelor(?:'s|s)?\s+(?:of|in|degree)|bsc\b|b\.\s*sc\b|b\.\s*a\b|ba\b|beng\b|b\.\s*eng\b|llb\b|b\.\s*ed\b|postgraduate\s+(?:in|degree|course|program(?:me)?|certificate|diploma)|pgcert\b|pgdip\b|graduate\s+(?:diploma|certificate|degree|program(?:me)?|in)|diploma\s+in|certificate\s+in)\b/i;
+
+// Reject navigation / boilerplate lines that are not actual programme entries.
+const PROGRAM_NOISE_RE =
+  /\b(?:apply|deadline|eligib|criteria|award(?:s|ed)?\s+(?:value|amount|is|of|for)|benefit|covers?|tuition|fee|stipend|monthly|yearly|annually|per\s+(?:month|year|semester)|how\s+to|click|more\s+info|view\s+(?:list|details|pdf)|download|read\s+more|learn\s+more|check|contact|call|email|register|enrol|opens?\s+(?:in|on)|tbc|tbd|n\/a|and\s+more|among\s+others|the\s+following|list\s+of|such\s+as|including|e\.g\.|i\.e\.|please\s+note|selection|informations?|guidelines?|prerequisite|requirement|button|updated?|last\s+update|breadcrumb|nav\b|home\b|back\s+to|skip|jump|share|print|save|bookmark|compare|related|process|taught|admission|entry|overview|explore|search|browse|more\s+about)\b|@|https?:|\bwww\./i;
+
+// Lines that read like prose rather than a programme title ("…is designed to
+// prepare students who …") must never become program options.
+const PROGRAM_PROSE_RE =
+  /\b(?:is|are|will|can|has|have|been|designed|aims?|provides?|offers?|prepares?|teaches?|qualifies?|equips?|students|applicants|those)\b/i;
+
+const PROGRAM_STOP_WORDS = new Set([
+  "of", "in", "and", "or", "the", "a", "an", "for", "with", "by", "from",
+  "to", "on", "at", "into", "over", "under", "as", "it", "its", "that",
+  "this", "master", "msc", "phd", "mphil", "mres", "mba", "bsc", "ba",
+  "llm", "postgraduate", "graduate", "diploma", "certificate", "degree",
+]);
+
+function collapseWhitespace(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function hasSolidSubject(rest: string): boolean {
+  const rest2 = rest.replace(/\([^)]*\)/g, " ").replace(/[^\w\s]/g, " ");
+  const words = rest2.split(/\s+/).filter(Boolean);
+  return words.some((w) => {
+    const wl = w.toLowerCase();
+    if (wl.length < 4) return false;
+    if (PROGRAM_STOP_WORDS.has(wl)) return false;
+    return true;
+  });
+}
+
+function scrapePrograms(text: string): string[] {
+  const out: string[] = [];
+  let inSection = false;
+  let sectionStretch = 0;
+  let pendingSectionLines = 0;
+  let guard = 0;
+
+  for (const raw of text.split("\n")) {
+    if (out.length >= 20 || guard++ > 1_500) break;
+    const line = raw.trim();
+    if (!line) {
+      if (inSection) sectionStretch += 1;
+      continue;
+    }
+    if (inSection && sectionStretch > 2) {
+      inSection = false;
+      sectionStretch = 0;
+    }
+    if (line.length <= 60 && PROGRAM_SECTION_HEAD_RE.test(line)) {
+      inSection = true;
+      sectionStretch = 0;
+      pendingSectionLines = 3;
+      continue;
+    }
+
+    const prog = line.replace(/^\s*(?:[-•·*–—]|\d{1,2}[.)])\s*/, "").trim();
+    if (!prog || prog.length > 90) {
+      if (inSection) sectionStretch += 1;
+      continue;
+    }
+
+    // Strong rule: the programme title starts with an explicit degree token.
+    const leadMatch = PROGRAM_LEAD_RE.exec(prog);
+    if (leadMatch) {
+      const rest = prog.slice(leadMatch[0].length);
+      const solid =
+        rest.trim().length > 0 &&
+        hasSolidSubject(rest) &&
+        !PROGRAM_PROSE_RE.test(prog) &&
+        !/[:|]\s*$/.test(prog);
+      if (solid) {
+        if (!PROGRAM_NOISE_RE.test(collapseWhitespace(prog).toLowerCase()) &&
+            !isBroadFieldStatement(collapseWhitespace(prog)) &&
+            !out.includes(collapseWhitespace(prog))) {
+          out.push(collapseWhitespace(prog));
+        }
+        sectionStretch = 0;
+        continue;
+      }
+      if (inSection) sectionStretch += 1;
+      continue;
+    }
+
+    // Header-anchored fallback: entries under a programme heading may omit the
+    // degree token ("Data Science", "Public Health"), but only a few lines after
+    // the heading are trusted and they must look like titles (no prose).
+    if (inSection && pendingSectionLines > 0) {
+      pendingSectionLines -= 1;
+      const clean = collapseWhitespace(prog);
+      const words = clean.split(/\s+/).filter(Boolean);
+      const looksTitled =
+        words.length >= 2 || (words.length === 1 && words[0].length >= 5 && /^[A-Z]/.test(words[0]));
+      if (
+        looksTitled &&
+        words.length <= 8 &&
+        !/:$/.test(clean) &&
+        !PROGRAM_NOISE_RE.test(clean.toLowerCase()) &&
+        !PROGRAM_PROSE_RE.test(clean) &&
+        !isBroadFieldStatement(clean) &&
+        !out.includes(clean)
+      ) {
+        out.push(clean);
+      }
+      sectionStretch = 0;
+      continue;
+    }
+
+    if (inSection) sectionStretch += 1;
+  }
+  return out;
+}
+
 function cleanNumber(value: unknown): number | null {
   const s = cleanStr(value);
   if (!s) return null;
@@ -105,23 +251,41 @@ function cleanDate(value: unknown): string | null {
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
 
-  // e.g. "March 1, 2027" or "1 March 2027"
-  const named = s.match(
-    /(?:(\d{1,2})\s*)?(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?,?\s+(\d{1,2}),?\s+(\d{4})/i,
+  const monthNames = [
+    "jan", "feb", "mar", "apr", "may", "jun",
+    "jul", "aug", "sep", "oct", "nov", "dec",
+  ];
+  const monthIndex = (token: string | undefined): number => {
+    const t = (token ?? "").toLowerCase().slice(0, 3);
+    return t ? monthNames.indexOf(t) : -1;
+  };
+
+  // Day Month Year (UK/Europe) — "15 January 2026", "15th January 2026",
+  // "1 Mar 2026". Common on European official scholarship pages.
+  const dayFirst = s.match(
+    /(\d{1,2})(?:st|nd|rd|th)?[\s,·.]+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?,?\s+((?:20\d{2}|19\d{2}))/i,
   );
-  if (named) {
-    const monthNames = [
-      "jan", "feb", "mar", "apr", "may", "jun",
-      "jul", "aug", "sep", "oct", "nov", "dec",
-    ];
-    const month = monthNames.findIndex((m) =>
-      named[2].toLowerCase().startsWith(m),
-    );
-    const day = named[1] ? Number(named[1]) : Number(named[3]);
+  if (dayFirst) {
+    const month = monthIndex(dayFirst[2]);
+    const day = Number(dayFirst[1]);
     if (month >= 0 && day >= 1 && day <= 31) {
       const mm = String(month + 1).padStart(2, "0");
       const dd = String(day).padStart(2, "0");
-      return `${named[4]}-${mm}-${dd}`;
+      return `${dayFirst[3]}-${mm}-${dd}`;
+    }
+  }
+
+  // Month Day, Year (US) — "March 1, 2027", "Mar 1st 2026".
+  const monthFirst = s.match(
+    /(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?[\s,]+(\d{1,2})(?:st|nd|rd|th)?,?\s+((?:20\d{2}|19\d{2}))/i,
+  );
+  if (monthFirst) {
+    const month = monthIndex(monthFirst[1]);
+    const day = Number(monthFirst[2]);
+    if (month >= 0 && day >= 1 && day <= 31) {
+      const mm = String(month + 1).padStart(2, "0");
+      const dd = String(day).padStart(2, "0");
+      return `${monthFirst[3]}-${mm}-${dd}`;
     }
   }
 
@@ -212,12 +376,39 @@ function cleanOne(
   const nameFromTitle = name !== asString(rawItem, "name") && !cleanStr(asString(rawItem, "name"));
   if (!name) return null;
 
-  const deadline = cleanDate(pick(rawItem, "deadline"));
+  // Deterministic facts scraped from the SAME official page. Used as a safety
+  // net when the LLM misses a value that is plainly on the page — never
+  // invented, always from this exact source.
+  const det = scrapeExtraction(page);
+
+  const llmDeadline = cleanDate(pick(rawItem, "deadline"));
+  const deadline = llmDeadline ?? det.deadline ?? null;
+  const llmDegrees = asList(rawItem, "degreeLevels");
+  const degreeLevels = llmDegrees.length > 0 ? llmDegrees : (det.degreeLevels ?? []);
   const description =
     asString(rawItem, "description") ??
     (nameFromTitle ? cleanStr(page.title) : null);
   const eligibility = asString(rawItem, "eligibilityRequirements");
-  const degreeLevels = asList(rawItem, "degreeLevels");
+
+  // Nationality scope stated on the page — used to filter by the user's
+  // citizenship. Only an explicit restriction excludes anyone; leaving it
+  // null/empty never hides a scholarship.
+  const restrictionRaw = (asString(rawItem, "nationalityRestriction") ?? "").toLowerCase();
+  let nationalityOpenToAll: Scholarship["nationalityOpenToAll"] = null;
+  if (restrictionRaw.includes("open") || restrictionRaw.includes("all")) {
+    nationalityOpenToAll = true;
+  } else if (restrictionRaw.includes("restrict") || restrictionRaw.includes("limit")) {
+    nationalityOpenToAll = false;
+  }
+  const eligibleNationalities = cleanList(pick(rawItem, "eligibleNationalities", "nationalities"));
+
+  // Open to ALL academic disciplines — preserved as a fact instead of being
+  // turned into a made-up program list. Fall back to the page text signal only
+  // when the page states it plainly. null when the page does not state it.
+  const allDispRaw = asString(rawItem, "openToAllDisciplines");
+  const openToAllDisciplines: Scholarship["openToAllDisciplines"] =
+    (allDispRaw == null ? null : /^(true|yes|1|open)$/i.test(allDispRaw.trim()) === true) ??
+    scrapeAllDisciplines(page.text);
 
   // Current application status read from the page ("open / closed / not open
   // yet"), used verbatim; the UI derives a badge from it + the deadline.
@@ -233,16 +424,25 @@ function cleanOne(
     }
   }
 
-  const hasSubstance =
+const hasSubstance =
     description !== null ||
     eligibility !== null ||
     cleanNumber(pick(rawItem, "stipendAmount")) !== null ||
     cleanNumber(pick(rawItem, "tuitionFee")) !== null ||
     normalizeFundingType(pick(rawItem, "fundingType")) !== null ||
-    deadline !== null;
+    deadline !== null ||
+    openToAllDisciplines === true;
   if (!hasSubstance) return null;
 
   const host = page.host;
+
+  const llmFields = cleanFields(
+    pick(rawItem, "fields", "eligiblePrograms", "programs", "fieldsOfStudy"),
+  );
+  const fields =
+    llmFields.length > 0 || openToAllDisciplines === true
+      ? llmFields
+      : (det.fields ?? []);
 
   return {
     id: scholarshipId(page.url),
@@ -253,12 +453,16 @@ function cleanOne(
     ),
     country: asString(rawItem, "country"),
     degreeLevels,
-    fields: cleanFields(pick(rawItem, "fields", "eligiblePrograms", "programs", "fieldsOfStudy")),
-    fundingType: normalizeFundingType(pick(rawItem, "fundingType")),
-    tuitionCoverage: normalizeTuitionCoverage(pick(rawItem, "tuitionCoverage")),
+    fields,
+    fundingType:
+      normalizeFundingType(pick(rawItem, "fundingType")) ??
+      normalizeFundingType(det.fundingType),
+    tuitionCoverage:
+      normalizeTuitionCoverage(pick(rawItem, "tuitionCoverage")) ??
+      normalizeTuitionCoverage(det.tuitionCoverage),
     tuitionFee: cleanNumber(pick(rawItem, "tuitionFee")),
-    stipendAmount: cleanNumber(pick(rawItem, "stipendAmount")),
-    stipendFrequency: asString(rawItem, "stipendFrequency"),
+    stipendAmount: cleanNumber(pick(rawItem, "stipendAmount")) ?? det.stipendAmount ?? null,
+    stipendFrequency: asString(rawItem, "stipendFrequency") ?? det.stipendFrequency ?? null,
     accommodationSupport: asString(rawItem, "accommodationSupport"),
     travelAllowance: asString(rawItem, "travelAllowance"),
     healthInsurance: asString(rawItem, "healthInsurance"),
@@ -266,9 +470,9 @@ function cleanOne(
     eligibilityRequirements: eligibility,
     requiredDocuments: asList(rawItem, "requiredDocuments"),
     ieltsRequirement: asString(rawItem, "ieltsRequirement"),
-    openingDate: cleanDate(pick(rawItem, "openingDate")),
+    openingDate: cleanDate(pick(rawItem, "openingDate")) ?? det.openingDate ?? null,
     deadline,
-    cycle: asString(rawItem, "cycle"),
+    cycle: asString(rawItem, "cycle") ?? det.cycle ?? null,
     officialScholarshipUrl: page.url,
     officialUniversityUrl: asString(rawItem, "officialUniversityUrl"),
     sourceUrl: page.url,
@@ -276,7 +480,10 @@ function cleanOne(
     officialSourceVerified: verified,
     currentStatus,
     description,
-    applicationInfo: asString(rawItem, "applicationInfo"),
+    applicationInfo: asString(rawItem, "applicationInfo") ?? det.applicationInfo ?? null,
+    eligibleNationalities,
+    nationalityOpenToAll,
+    openToAllDisciplines,
   };
 }
 
@@ -301,18 +508,29 @@ const CYCLE_RE =
 function scrapeDateNearKeyword(
   text: string,
   keywords: RegExp,
-  offsetBefore = 80,
-  offsetAfter = 220,
+  offsetBefore = 110,
+  offsetAfter = 260,
 ): { date: string; cycle: string | null } | null {
-  const pattern = new RegExp(keywords.source, `${keywords.flags.replace("g", "") || ""}i`);
-  const m = pattern.exec(text);
-  if (!m) return null;
-  const start = Math.max(0, m.index - offsetBefore);
-  const snippet = text.slice(start, m.index + m[0].length + offsetAfter);
-  const date = cleanDate(snippet);
-  if (!date) return null;
-  const cycle = snippet.match(CYCLE_RE)?.[0]?.replace(/\s+/g, " ") ?? null;
-  return { date, cycle };
+  // Scan EVERY keyword occurrence — the first "deadline" mention on a page is
+  // often just navigation text with no date. Only stop at a match with a real,
+  // plausible date near it (so "…15th January 2026 … APPLICATION DEADLINE"
+  // — date BEFORE the keyword — is also caught).
+  const pattern = new RegExp(keywords.source, keywords.flags.includes("i") ? "g" : `${keywords.flags}g`);
+  let m: RegExpExecArray | null;
+  let guard = 0;
+  while ((m = pattern.exec(text)) && guard < 60) {
+    guard += 1;
+    const start = Math.max(0, (m.index ?? 0) - offsetBefore);
+    const snippet = text.slice(start, (m.index ?? 0) + m[0].length + offsetAfter);
+    const date = cleanDate(snippet);
+    if (!date) continue;
+    // Ignore implausibly old/stale dates ("deadline: 2001").
+    const year = Number(date.slice(0, 4));
+    if (year < 2018 || year > 2040) continue;
+    const cycle = snippet.match(CYCLE_RE)?.[0]?.replace(/\s+/g, " ") ?? null;
+    return { date, cycle };
+  }
+  return null;
 }
 
 function scrapeExtraction(page: FetchedPage): Partial<Scholarship> {
@@ -382,6 +600,9 @@ function scrapeExtraction(page: FetchedPage): Partial<Scholarship> {
     if (re.test(text) && !degreeLevels.includes(label)) degreeLevels.push(label);
   }
 
+  // ── Eligible programmes listed on the official page ────────────────────────
+  const fields = scrapePrograms(text);
+
   // ── Country: host TLD is a real property of the official source ────────────
   const country = hostCountry(page.url);
 
@@ -401,6 +622,7 @@ function scrapeExtraction(page: FetchedPage): Partial<Scholarship> {
     stipendAmount,
     stipendFrequency,
     degreeLevels: degreeLevels.slice(0, 4),
+    fields,
     country,
     applicationInfo,
   };
@@ -433,13 +655,18 @@ export function fallbackRecord(page: FetchedPage, verified = false): Scholarship
 
   const scraped = scrapeExtraction(page);
 
+  // Preserve "open to all academic disciplines" as a fact from the page rather
+  // than showing nothing or inventing a program list.
+  const openToAllDisciplines = scrapeAllDisciplines(page.text);
+
   return {
     id: scholarshipId(page.url),
     name,
     university,
     country: scraped.country ?? null,
     degreeLevels: scraped.degreeLevels ?? [],
-    fields: [],
+    fields: openToAllDisciplines ? [] : (scraped.fields ?? []),
+    openToAllDisciplines,
     fundingType: scraped.fundingType ?? null,
     tuitionCoverage: scraped.tuitionCoverage ?? null,
     tuitionFee: null,
@@ -463,6 +690,8 @@ export function fallbackRecord(page: FetchedPage, verified = false): Scholarship
     currentStatus: null,
     description,
     applicationInfo: scraped.applicationInfo ?? null,
+    eligibleNationalities: [],
+    nationalityOpenToAll: null,
   };
 }
 
@@ -675,7 +904,10 @@ const JSON_SCHEMA_DOC = `{
   "applicationStatus": "",
   "officialUniversityUrl": "",
   "description": "",
-  "applicationInfo": ""
+  "applicationInfo": "",
+  "eligibleNationalities": [],
+  "nationalityRestriction": "",
+  "openToAllDisciplines": false
 }`;
 
 // ─── Targeted context (bounded, fast LLM input) ──────────────────────────────
@@ -770,16 +1002,32 @@ never invent:
   scholarship explicitly says it is open to, copied verbatim from the page.
   Return ONE distinct program/field per array element (never join several into
   one comma-separated string), e.g. ["Computer Science", "Economics"]. Never
-  normalize, rename, translate, expand, or infer. Do NOT return generic
-  eligibility phrases such as "all academic disciplines", "all fields",
-  "any subject", "open to all", "various disciplines" — those mean the page
-  does NOT list programs, so leave []. Leave [] whenever the page does not
-  explicitly name eligible programs/fields.
+  normalize, rename, translate, expand, or infer. If the page explicitly names
+  programs, ALWAYS copy them here. Do NOT return generic eligibility phrases
+  such as "all academic disciplines", "all fields", "any subject",
+  "open to all", "various disciplines" — if the page says the scholarship is
+  open to ALL disciplines, leave "fields" = [] and set "openToAllDisciplines":
+  true instead. Leave [] whenever the page does not explicitly name eligible
+  programs/fields.
+- "openToAllDisciplines": true ONLY when the page (or its related official
+  pages) explicitly states the opportunity is open to all academic
+  disciplines / any subject / any field of study / all fields. false otherwise.
 - fundingType is one of: "Fully funded", "Partially funded", "Tuition fee waiver", "Funding available" — or empty.
 - tuitionCoverage is one of: "Full tuition", "Partial tuition", "Tuition + living costs", "Not covered" — or empty.
 - officialUniversityUrl must be a URL literally present on the page (or empty).
 - description: a 2-3 sentence neutral summary of what this page/scholarship offers, using only stated facts.
 - applicationInfo: how to apply (steps, link text, form), using only stated facts.
+- "eligibleNationalities": the countries/nationalities this scholarship EXPLICITLY states
+  are eligible to apply, copied verbatim from the page (e.g. ["Pakistani", "Bangladeshi",
+  "Indian", "USA", "EU citizens", "children of alumni"]). Copy exactly as written — do not
+  rename, expand, or infer. Leave [] whenever the page does not explicitly name any
+  countries/nationalities.
+- "nationalityRestriction": "open_to_all" ONLY when the page explicitly says eligibility is
+  open to all nationalities/any nationality/international students generally with no country
+  restriction ("open to international students" alone does NOT count — no restriction stated
+  → ""). "restricted" ONLY when the page explicitly limits eligibility to specific
+  countries/nationalities (e.g. "open only to citizens of X", "residents of Y", a listed
+  country set). If the page says nothing about nationalities, use "".
 - name: the specific scholarship/program name. If the page is a general list or
   article rather than one specific scholarship, use the page's topic as the name
   (without the site/brand suffix). If the page has nothing scholarship-related,
@@ -792,6 +1040,12 @@ ${JSON_SCHEMA_DOC}
 
 Pages with nothing usable must still produce one object with all empty values
 and "name": null.
+
+Some pages include sections titled "[RELATED OFFICIAL PAGE: …]" followed by the
+text of officially linked pages from the SAME organisation (e.g. its apply or
+programmes page). These belong to the same official source as the main page:
+use them for the deadline and the eligible programmes/fields exactly as stated
+there.
 
 --- PAGES ---
 ${blocks.join("\n\n--- PAGE BREAK ---\n\n")}`;
@@ -838,10 +1092,17 @@ export async function extractScholarshipsBatch(
 
   return pages.map((page, i) => {
     const item = raw[i];
-    if (!item) return null;
+    if (!item) {
+      // LLM returned nothing for this page → keep the deterministic facts
+      // (deadline/extraction) instead of dropping the card entirely.
+      return fallbackRecord(page, verified);
+    }
     const result = cleanOne(item, page, verified);
     if (!result) {
       console.error(`[extract] Skipped (no/invalid name or no substance) ${page.url}`);
+      // Never let a page's scraped deadline/programme facts disappear just
+      // because the LLM had nothing usable to say about it.
+      return fallbackRecord(page, verified);
     }
     return result;
   });

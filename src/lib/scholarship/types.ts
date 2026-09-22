@@ -67,6 +67,24 @@ export interface Scholarship {
   officialSourceVerified: boolean | null;
   /** current open/upcoming/closed/expired state, from the official page. */
   currentStatus: string | null;
+  /**
+   * Nationalities the official page explicitly states are eligible, verbatim
+   * (e.g. "Pakistani", "USA", "EU citizens"). Empty when not stated. Transient
+   * discovery-pipeline data — not persisted to the catalog row.
+   */
+  eligibleNationalities?: string[] | null;
+  /**
+   * Nationality scope stated on the official page: true = explicitly open to
+   * all nationalities, false = restricted to a listed set, null = not stated.
+   * Used with the user's profile citizenship to filter relevance.
+   */
+  nationalityOpenToAll?: boolean | null;
+  /**
+   * True when the official page EXPLICITLY states the scholarship is open to
+   * all academic disciplines / any subject, rather than listing programs.
+   * Transient discovery-pipeline data — not persisted.
+   */
+  openToAllDisciplines?: boolean | null;
   description: string | null;
   applicationInfo: string | null;
 }
